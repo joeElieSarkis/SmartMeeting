@@ -1,9 +1,15 @@
+using Microsoft.EntityFrameworkCore;
+using SmartMeeting.Infrastructure.Persistence; 
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// Add DbContext with SQL Server provider
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+
+// Swagger stuff (already here)
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
