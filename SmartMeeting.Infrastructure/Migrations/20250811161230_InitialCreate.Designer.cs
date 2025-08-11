@@ -12,7 +12,7 @@ using SmartMeeting.Infrastructure.Persistence;
 namespace SmartMeeting.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20250808130402_InitialCreate")]
+    [Migration("20250811161230_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
