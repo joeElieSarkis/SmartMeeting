@@ -26,4 +26,8 @@
     <ProjectReference Include="..\SmartMeeting.Domain\SmartMeeting.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Migrations\" />
+  </ItemGroup>
+
 </Project>
