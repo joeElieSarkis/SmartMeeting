@@ -10,7 +10,14 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddControllers();
+
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IMeetingService, MeetingService>();
+builder.Services.AddScoped<IRoomService, RoomService>();
+builder.Services.AddScoped<IParticipantService, ParticipantService>();
+builder.Services.AddScoped<IMeetingMinutesService, MeetingMinutesService>();
+builder.Services.AddScoped<IAttachmentService, AttachmentService>();
+
 
 // Swagger stuff (already here)
 builder.Services.AddEndpointsApiExplorer();
