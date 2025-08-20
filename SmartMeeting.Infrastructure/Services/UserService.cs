@@ -1,10 +1,13 @@
 ﻿using SmartMeeting.Application.Services;
 using SmartMeeting.Application.DTOs;
-using SmartMeeting.Infrastructure.Persistence; // for AppDbContext
+using SmartMeeting.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using System.Linq;
+using System.Threading.Tasks;
+using BCrypt.Net;
+using SmartMeeting.Domain.Entities;
 
 namespace SmartMeeting.Infrastructure.Services
 {
@@ -25,8 +28,10 @@ namespace SmartMeeting.Infrastructure.Services
             return new UserDto
             {
                 Id = user.Id,
-                Email = user.Email
-                // map other properties if needed
+                Name = user.Name,
+                Email = user.Email,
+                Role = user.Role,
+                CreatedAt = user.CreatedAt
             };
         }
 
@@ -36,18 +41,22 @@ namespace SmartMeeting.Infrastructure.Services
             return users.Select(user => new UserDto
             {
                 Id = user.Id,
-                Email = user.Email
-                // map other properties
+                Name = user.Name,
+                Email = user.Email,
+                Role = user.Role,
+                CreatedAt = user.CreatedAt
             });
         }
 
         public async Task<UserDto> CreateUserAsync(UserCreateDto userCreateDto)
         {
-            var user = new Domain.Entities.User
+            var user = new User
             {
+                Name = userCreateDto.Name,
                 Email = userCreateDto.Email,
-                PasswordHash = userCreateDto.PasswordHash
-                // set other properties
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(userCreateDto.Password), // hash here
+                Role = string.IsNullOrEmpty(userCreateDto.Role) ? "Employee" : userCreateDto.Role,
+                CreatedAt = DateTime.UtcNow
             };
 
             _context.Users.Add(user);
@@ -56,7 +65,10 @@ namespace SmartMeeting.Infrastructure.Services
             return new UserDto
             {
                 Id = user.Id,
-                Email = user.Email
+                Name = user.Name,
+                Email = user.Email,
+                Role = user.Role,
+                CreatedAt = user.CreatedAt
             };
         }
 
@@ -66,11 +78,18 @@ namespace SmartMeeting.Infrastructure.Services
             if (user == null) throw new KeyNotFoundException("User not found");
 
             user.Email = userUpdateDto.Email;
-            user.PasswordHash = userUpdateDto.PasswordHash;
-            // update other properties if any
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(userUpdateDto.Password); // hash again
+
+            if (!string.IsNullOrEmpty(userUpdateDto.Name))
+                user.Name = userUpdateDto.Name;
+
+            if (!string.IsNullOrEmpty(userUpdateDto.Role))
+                user.Role = userUpdateDto.Role;
 
             await _context.SaveChangesAsync();
         }
+
+
 
         public async Task DeleteUserAsync(int id)
         {
@@ -82,3 +101,4 @@ namespace SmartMeeting.Infrastructure.Services
         }
     }
 }
+

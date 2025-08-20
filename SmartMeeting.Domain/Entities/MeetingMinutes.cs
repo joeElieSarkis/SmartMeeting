@@ -1,19 +1,30 @@
 ﻿using System;
-using System.Collections.Generic;
 
 namespace SmartMeeting.Domain.Entities
 {
     public class MeetingMinutes
     {
         public int Id { get; set; }
+
+        // FK to Meeting 
         public int MeetingId { get; set; }
         public Meeting Meeting { get; set; } = null!;
+
+        // Summary of the meeting 
         public string Summary { get; set; } = null!;
-        public int? AssignedTo { get; set; }      // foreign key
-        public User? AssignedToUser { get; set; } = null!;  // navigation property
-        public string TaskDescription { get; set; } = null!;
-        public string TaskStatus { get; set; } = null!;
-        public DateTime TaskDueDate { get; set; }
+
+        // FK to User 
+        public int? AssignedTo { get; set; }
+        public User? AssignedToUser { get; set; }
+
+        // Task details 
+        public string? TaskDescription { get; set; }
+        public string? TaskStatus { get; set; } = "Pending"; // default value
+        public DateTime? TaskDueDate { get; set; }
+
+        // Creation timestamp
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }
+
+

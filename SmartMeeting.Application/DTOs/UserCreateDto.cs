@@ -2,10 +2,12 @@
 {
     public class UserCreateDto
     {
-        public string Name { get; set; } = null!;
-        public string Email { get; set; } = null!;
-        public string PasswordHash { get; set; } = null!;
+        public required string Name { get; set; }
+        public required string Email { get; set; }
+        public required string Password { get; set; } // plain password, not hashed
         public string? Role { get; set; }
     }
 }
+
+
 

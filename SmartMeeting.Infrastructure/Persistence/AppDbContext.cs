@@ -23,22 +23,28 @@ namespace SmartMeeting.Infrastructure.Persistence
                 .HasIndex(u => u.Email)
                 .IsUnique();
 
-            // Meeting relationships
+            // Meeting -> Organizer (User)
             modelBuilder.Entity<Meeting>()
                 .HasOne(m => m.Organizer)
                 .WithMany(u => u.OrganizedMeetings)
-                .HasForeignKey(m => m.OrganizerId);
+                .HasForeignKey(m => m.OrganizerId)
+                .OnDelete(DeleteBehavior.Restrict);
 
+            // Meeting -> Room (explicit nav to Room.Meetings to avoid shadow RoomId1)
             modelBuilder.Entity<Meeting>()
                 .HasOne(m => m.Room)
-                .WithMany()
-                .HasForeignKey(m => m.RoomId);
+                .WithMany(r => r.Meetings)
+                .HasForeignKey(m => m.RoomId)
+                .OnDelete(DeleteBehavior.Restrict);
+
 
             // Participant relationships
             modelBuilder.Entity<Participant>()
                 .HasOne(p => p.Meeting)
-                .WithMany()
-                .HasForeignKey(p => p.MeetingId);
+                .WithMany(m => m.Participants)
+                .HasForeignKey(p => p.MeetingId)
+                .OnDelete(DeleteBehavior.Cascade);
+
 
             // Participant → User (no cascade delete)
             modelBuilder.Entity<Participant>()
@@ -60,14 +66,16 @@ namespace SmartMeeting.Infrastructure.Persistence
                 .HasOne(mm => mm.AssignedToUser)
                 .WithMany(u => u.AssignedMeetingMinutes)
                 .HasForeignKey(mm => mm.AssignedTo)
-                .OnDelete(DeleteBehavior.Restrict); 
+                .OnDelete(DeleteBehavior.Restrict);
 
 
             // Attachment relationships
             modelBuilder.Entity<Attachment>()
                 .HasOne(a => a.Meeting)
-                .WithMany()
-                .HasForeignKey(a => a.MeetingId);
+                .WithMany(m => m.Attachments)
+                .HasForeignKey(a => a.MeetingId)
+                .OnDelete(DeleteBehavior.Cascade);
+
         }
     }
 }
