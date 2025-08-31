@@ -1,17 +1,32 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
-import App from './App.jsx'
+import Login from './App.jsx'
+import AppLayout from './layouts/AppLayout.jsx'
 import Dashboard from './pages/Dashboard.jsx'
+import MeetingBooking from './pages/MeetingBooking.jsx'
+import ActiveMeeting from './pages/ActiveMeeting.jsx'
+import MinutesEditor from './pages/MinutesEditor.jsx'
+import MinutesReview from './pages/MinutesReview.jsx'
+import AdminRooms from './pages/AdminRooms.jsx'
 import './index.css'
 
 const router = createBrowserRouter([
-  { path: '/', element: <App /> },           // Login
-  { path: '/dashboard', element: <Dashboard /> },
+  { path: '/', element: <Login /> }, // Login
+  {
+    path: '/',
+    element: <AppLayout />,
+    children: [
+      { path: '/dashboard', element: <Dashboard /> },
+      { path: '/meetings/book', element: <MeetingBooking /> },
+      { path: '/meetings/active', element: <ActiveMeeting /> },
+      { path: '/minutes', element: <MinutesEditor /> },
+      { path: '/minutes/review', element: <MinutesReview /> },
+      { path: '/admin/rooms', element: <AdminRooms /> },
+    ]
+  }
 ])
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <RouterProvider router={router} />
-  </React.StrictMode>,
+  <React.StrictMode><RouterProvider router={router} /></React.StrictMode>
 )
