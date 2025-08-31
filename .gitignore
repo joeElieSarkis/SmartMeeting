@@ -11,3 +11,10 @@ obj/
 *.log
 *.tmp
 *.temp
+
+# ===== Frontend (React/Vite) =====
+smartmeeting-frontend/node_modules/
+smartmeeting-frontend/dist/
+smartmeeting-frontend/dist-ssr/
+smartmeeting-frontend/*.local
+
