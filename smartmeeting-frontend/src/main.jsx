@@ -12,7 +12,7 @@ import AdminRooms from './pages/AdminRooms.jsx'
 import './index.css'
 
 const router = createBrowserRouter([
-  { path: '/', element: <Login /> }, // Login
+  { path: '/', element: <Login /> },
   {
     path: '/',
     element: <AppLayout />,
@@ -23,8 +23,8 @@ const router = createBrowserRouter([
       { path: '/minutes', element: <MinutesEditor /> },
       { path: '/minutes/review', element: <MinutesReview /> },
       { path: '/admin/rooms', element: <AdminRooms /> },
-    ]
-  }
+    ],
+  },
 ])
 
 ReactDOM.createRoot(document.getElementById('root')).render(
