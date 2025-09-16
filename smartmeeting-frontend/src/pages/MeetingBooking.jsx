@@ -1,7 +1,45 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { api } from "../api";
+import { getUser } from "../auth";
 
 export default function MeetingBooking(){
-  const [form,setForm]=useState({ title:"", date:"", start:"", duration:30, attendees:"", roomId:"", recurring:false, video:false });
+  const [rooms,setRooms] = useState([]);
+  const [err,setErr] = useState("");
+  const [ok,setOk] = useState("");
+  const [form,setForm] = useState({
+    title:"", agenda:"", date:"", start:"", end:"", roomId:""
+  });
+
+  useEffect(()=>{
+    api.rooms().then(setRooms).catch(()=>setErr("Failed to load rooms"));
+  },[]);
+
+  const submit = async () => {
+    try {
+      setErr(""); setOk("");
+      const user = getUser();
+      if(!user) { setErr("Not logged in"); return; }
+
+      // keep local wall-clock time (no UTC conversion)
+      const startTime = `${form.date}T${form.start}:00`;
+      const endTime   = `${form.date}T${form.end}:00`;
+
+      await api.meetings.create({
+        title: form.title,
+        agenda: form.agenda,
+        organizerId: user.id,
+        roomId: Number(form.roomId),
+        startTime,
+        endTime,
+        status: "Scheduled"
+      });
+
+      setOk("Meeting booked!");
+      setForm({ title:"", agenda:"", date:"", start:"", end:"", roomId:"" });
+    } catch (e) {
+      setErr("Failed to create meeting");
+    }
+  };
 
   return (
     <div className="grid" style={{gap:16}}>
@@ -12,30 +50,22 @@ export default function MeetingBooking(){
           <h2 className="section-title">Details</h2>
           <div className="grid" style={{gap:10}}>
             <input className="input" placeholder="Title" value={form.title} onChange={e=>setForm({...form,title:e.target.value})}/>
+            <textarea className="input" rows="3" placeholder="Agenda" value={form.agenda} onChange={e=>setForm({...form,agenda:e.target.value})}/>
             <div className="row">
               <input className="input" type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})}/>
               <input className="input" type="time" value={form.start} onChange={e=>setForm({...form,start:e.target.value})}/>
-              <input className="input" type="number" min="15" step="15" placeholder="Duration (min)" value={form.duration} onChange={e=>setForm({...form,duration:+e.target.value})}/>
+              <input className="input" type="time" value={form.end} onChange={e=>setForm({...form,end:e.target.value})}/>
             </div>
-            <input className="input" placeholder="Attendees (emails, comma-separated)" value={form.attendees} onChange={e=>setForm({...form,attendees:e.target.value})}/>
             <select className="input" value={form.roomId} onChange={e=>setForm({...form,roomId:e.target.value})}>
               <option value="">Select Room</option>
-              <option value="1">Room A (8)</option>
-              <option value="2">Room B (4)</option>
-              <option value="3">Room C (12)</option>
+              {rooms.map(r => <option key={r.id} value={r.id}>{r.name} ({r.capacity})</option>)}
             </select>
-            <label style={{display:"flex",gap:8,alignItems:"center"}}>
-              <input type="checkbox" checked={form.recurring} onChange={e=>setForm({...form,recurring:e.target.checked})}/>
-              Recurring meeting
-            </label>
-            <label style={{display:"flex",gap:8,alignItems:"center"}}>
-              <input type="checkbox" checked={form.video} onChange={e=>setForm({...form,video:e.target.checked})}/>
-              Video conferencing
-            </label>
             <div className="row">
-              <button className="btn">Book Now</button>
-              <button className="btn ghost" type="button">Cancel</button>
+              <button className="btn" type="button" onClick={submit}>Book Now</button>
+              <button className="btn ghost" type="button" onClick={()=>setForm({ title:"", agenda:"", date:"", start:"", end:"", roomId:"" })}>Cancel</button>
             </div>
+            {ok && <div style={{color:"var(--success)"}}>{ok}</div>}
+            {err && <div style={{color:"var(--danger)"}}>{err}</div>}
           </div>
         </div>
 
