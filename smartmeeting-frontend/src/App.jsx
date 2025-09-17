@@ -1,57 +1,36 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-
-const API = "http://localhost:5114"; // your backend
+import { api } from "./api";
 
 export default function Login(){
-  const nav = useNavigate();
-  const [email,setEmail] = useState("");
-  const [password,setPassword] = useState("");
-  const [loading,setLoading] = useState(false);
-  const [error,setError] = useState("");
+  const [email,setEmail] = useState("admin@smartmeeting.local");
+  const [password,setPassword] = useState("admin123");
+  const [err,setErr] = useState("");
 
-  const onSubmit = async (e)=>{
+  async function submit(e){
     e.preventDefault();
-    setError(""); setLoading(true);
+    setErr("");
     try{
-      const res = await fetch(`${API}/api/auth/login`, {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ email, password })
-      });
-      if(!res.ok){
-        setError("Invalid email or password");
-        return;
-      }
-      const user = await res.json();
-      localStorage.setItem("sm_user", JSON.stringify(user)); // keep simple for now
-      nav("/dashboard");
-    }catch(err){
-      setError("Cannot reach server");
-    }finally{
-      setLoading(false);
+      const user = await api.login(email, password);
+      localStorage.setItem("sm_user", JSON.stringify(user));
+      window.location.href = "/dashboard";
+    }catch{
+      setErr("Invalid credentials");
     }
-  };
+  }
 
   return (
-    <div style={{minHeight:"100vh",display:"grid",placeItems:"center"}}>
-      <div className="card" style={{width:380}}>
-        <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
-          <img src="/logo.svg" width="24" height="24" alt=""/>
-          <strong>SmartMeeting</strong>
-        </div>
-        <h1 className="page-title">Sign in</h1>
-        <form onSubmit={onSubmit} className="grid" style={{gap:10}}>
-          <input className="input" type="email" placeholder="Email / Username" value={email} onChange={(e)=>setEmail(e.target.value)} required/>
-          <input className="input" type="password" placeholder="Password" value={password} onChange={(e)=>setPassword(e.target.value)} required/>
-          <button className="btn" type="submit" disabled={loading}>{loading ? "Signing in..." : "Login"}</button>
-          {error && <div style={{color:"crimson",fontSize:14}}>{error}</div>}
+    <div className="container">
+      <div className="card" style={{maxWidth:420, margin:"60px auto"}}>
+        <h1 className="page-title">SmartMeeting Login</h1>
+        <form className="grid" style={{gap:12}} onSubmit={submit}>
+          <input className="input" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
+          <input className="input" placeholder="Password" type="password" value={password} onChange={e=>setPassword(e.target.value)} />
+          <button className="btn" type="submit">Sign In</button>
+          {err && <div style={{color:"var(--danger)"}}>{err}</div>}
         </form>
-        <div style={{marginTop:10}}>
-          <Link to="#" style={{color:"var(--primary)"}}>Forgot Password?</Link>
-        </div>
       </div>
     </div>
   );
 }
+
 

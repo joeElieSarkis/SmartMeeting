@@ -20,7 +20,6 @@ builder.Services.AddScoped<IMeetingMinutesService, MeetingMinutesService>();
 builder.Services.AddScoped<IAttachmentService, AttachmentService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
-
 // CORS: allow Vite dev server
 const string AllowFrontend = "_AllowFrontend";
 builder.Services.AddCors(options =>
@@ -36,6 +35,14 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+// === Apply migrations + seed ===
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.MigrateAsync();                                      // apply pending migrations
+    await SmartMeeting.Infrastructure.Persistence.DbSeeder.SeedAsync(db);  // seed admin, sample rooms, etc.
+}
 
 if (app.Environment.IsDevelopment())
 {
@@ -53,4 +60,5 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
 
