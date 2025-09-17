@@ -5,8 +5,26 @@ async function jfetch(path, options = {}) {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options,
   });
-  if (!res.ok) throw new Error(await res.text());
-  return res.status === 204 ? null : res.json();
+
+  let data = null;
+  try {
+    if (res.status !== 204) {
+      data = await res.json();
+    }
+  } catch {
+    // fallback if response is not JSON
+    data = await res.text();
+  }
+
+  if (!res.ok) {
+    // throw structured error with status + message
+    const message =
+      (data && data.message) ||
+      (typeof data === "string" ? data : "Request failed");
+    throw { status: res.status, message };
+  }
+
+  return data;
 }
 
 export const api = {
@@ -46,7 +64,7 @@ export const api = {
   // Meeting Minutes
   minutes: {
     byMeeting: (meetingId) =>
-      jfetch(`/api/meetingminutes?meetingId=${meetingId}`),
+      jfetch(`/api/meetingminutes/byMeeting/${meetingId}`),
     create: (payload) =>
       jfetch("/api/meetingminutes", {
         method: "POST",

@@ -15,6 +15,7 @@ namespace SmartMeeting.API.Controllers
             _meetingService = meetingService;
         }
 
+        // GET: api/meetings/{id}
         [HttpGet("{id}")]
         public async Task<IActionResult> GetMeeting(int id)
         {
@@ -23,6 +24,7 @@ namespace SmartMeeting.API.Controllers
             return Ok(meeting);
         }
 
+        // GET: api/meetings
         [HttpGet]
         public async Task<IActionResult> GetAllMeetings()
         {
@@ -30,27 +32,64 @@ namespace SmartMeeting.API.Controllers
             return Ok(meetings);
         }
 
+        // POST: api/meetings
         [HttpPost]
         public async Task<IActionResult> CreateMeeting([FromBody] MeetingCreateDto dto)
         {
-            var createdMeeting = await _meetingService.CreateMeetingAsync(dto);
-            return CreatedAtAction(nameof(GetMeeting), new { id = createdMeeting.Id }, createdMeeting);
+            try
+            {
+                var createdMeeting = await _meetingService.CreateMeetingAsync(dto);
+                return CreatedAtAction(nameof(GetMeeting), new { id = createdMeeting.Id }, createdMeeting);
+            }
+            catch (ArgumentException ex) // invalid start/end
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex) // overlap
+            {
+                return Conflict(new { message = ex.Message });
+            }
         }
 
+        // PUT: api/meetings/{id}
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateMeeting(int id, [FromBody] MeetingUpdateDto dto)
         {
-            if (id != dto.Id) return BadRequest("ID mismatch");
+            if (id != dto.Id) return BadRequest(new { message = "ID mismatch" });
 
-            await _meetingService.UpdateMeetingAsync(dto);
-            return NoContent();
+            try
+            {
+                await _meetingService.UpdateMeetingAsync(dto);
+                return NoContent();
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound();
+            }
         }
 
+        // DELETE: api/meetings/{id}
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteMeeting(int id)
         {
-            await _meetingService.DeleteMeetingAsync(id);
-            return NoContent();
+            try
+            {
+                await _meetingService.DeleteMeetingAsync(id);
+                return NoContent();
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound();
+            }
         }
     }
 }
+
