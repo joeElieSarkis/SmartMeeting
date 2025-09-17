@@ -52,7 +52,7 @@ export default function Dashboard() {
       <div style={grid}>
         <button className="btn" onClick={()=>nav("/meetings/book")}>Schedule Meeting</button>
         <button className="btn" onClick={goJoin} disabled={!nextMeeting}>Join Now</button>
-        <button className="btn" onClick={()=>nav("/minutes")}>View Minutes</button>
+        <button className="btn" onClick={()=>nav("/minutes/review")}>View Minutes</button>
       </div>
 
       <section style={card}>
