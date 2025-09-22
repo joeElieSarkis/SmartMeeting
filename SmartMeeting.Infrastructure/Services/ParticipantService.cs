@@ -42,6 +42,22 @@ namespace SmartMeeting.Infrastructure.Services
             });
         }
 
+        // NEW: filter by meetingId
+        public async Task<IEnumerable<ParticipantDto>> GetByMeetingIdAsync(int meetingId)
+        {
+            var participants = await _context.Participants
+                .AsNoTracking()
+                .Where(p => p.MeetingId == meetingId)
+                .ToListAsync();
+
+            return participants.Select(p => new ParticipantDto
+            {
+                Id = p.Id,
+                MeetingId = p.MeetingId,
+                UserId = p.UserId
+            });
+        }
+
         public async Task<ParticipantDto> CreateParticipantAsync(ParticipantCreateDto dto)
         {
             var participant = new Participant
@@ -82,4 +98,5 @@ namespace SmartMeeting.Infrastructure.Services
         }
     }
 }
+
 

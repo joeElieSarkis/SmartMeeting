@@ -8,34 +8,38 @@ async function jfetch(path, options = {}) {
 
   let data = null;
   try {
-    if (res.status !== 204) {
-      data = await res.json();
-    }
+    if (res.status !== 204) data = await res.json();
   } catch {
-    // fallback if response is not JSON
     data = await res.text();
   }
 
   if (!res.ok) {
-    // throw structured error with status + message
     const message =
       (data && data.message) ||
       (typeof data === "string" ? data : "Request failed");
-    throw { status: res.status, message };
+    const err = new Error(message);
+    err.status = res.status;
+    err.body = data;
+    throw err;
   }
 
   return data;
 }
 
 export const api = {
-  // Authentication
+  // ===== Auth =====
   login: (email, password) =>
     jfetch("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
 
-  // Rooms
+  // ===== Users =====
+  users: {
+    all: () => jfetch("/api/users"),
+  },
+
+  // ===== Rooms =====
   rooms: {
     all: () => jfetch("/api/rooms"),
     create: (payload) =>
@@ -45,7 +49,7 @@ export const api = {
       }),
   },
 
-  // Meetings
+  // ===== Meetings =====
   meetings: {
     all: () => jfetch("/api/meetings"),
     byId: (id) => jfetch(`/api/meetings/${id}`),
@@ -61,10 +65,20 @@ export const api = {
       }),
   },
 
-  // Meeting Minutes
+  // ===== Participants =====
+  participants: {
+    byMeeting: (meetingId) => jfetch(`/api/participants/byMeeting/${meetingId}`),
+    create: (payload) =>
+      jfetch("/api/participants", {
+        method: "POST",
+        body: JSON.stringify(payload), // { meetingId, userId }
+      }),
+  },
+
+  // ===== Meeting Minutes =====
   minutes: {
     byMeeting: (meetingId) =>
-      jfetch(`/api/meetingminutes/byMeeting/${meetingId}`),
+      jfetch(`/api/meetingminutes/byMeeting/${meetingId}`), // matches your controller
     create: (payload) =>
       jfetch("/api/meetingminutes", {
         method: "POST",
@@ -72,3 +86,4 @@ export const api = {
       }),
   },
 };
+

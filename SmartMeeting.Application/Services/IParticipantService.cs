@@ -8,6 +8,7 @@ namespace SmartMeeting.Application.Services
     {
         Task<ParticipantDto?> GetParticipantByIdAsync(int id);
         Task<IEnumerable<ParticipantDto>> GetAllParticipantsAsync();
+        Task<IEnumerable<ParticipantDto>> GetByMeetingIdAsync(int meetingId);
         Task<ParticipantDto> CreateParticipantAsync(ParticipantCreateDto dto);
         Task UpdateParticipantAsync(ParticipantUpdateDto dto);
         Task DeleteParticipantAsync(int id);

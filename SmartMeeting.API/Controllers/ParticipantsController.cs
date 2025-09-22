@@ -15,12 +15,14 @@ namespace SmartMeeting.API.Controllers
             _participantService = participantService;
         }
 
+        // GET: api/participants
         [HttpGet]
         public async Task<IEnumerable<ParticipantDto>> GetParticipants()
         {
             return await _participantService.GetAllParticipantsAsync();
         }
 
+        // GET: api/participants/{id}
         [HttpGet("{id}")]
         public async Task<ActionResult<ParticipantDto>> GetParticipant(int id)
         {
@@ -29,6 +31,15 @@ namespace SmartMeeting.API.Controllers
             return participant;
         }
 
+        // NEW: Get all participants for a specific meeting
+        // GET: api/participants/byMeeting/{meetingId}
+        [HttpGet("byMeeting/{meetingId}")]
+        public async Task<IEnumerable<ParticipantDto>> GetParticipantsByMeeting(int meetingId)
+        {
+            return await _participantService.GetByMeetingIdAsync(meetingId);
+        }
+
+        // POST: api/participants
         [HttpPost]
         public async Task<ActionResult<ParticipantDto>> CreateParticipant(ParticipantCreateDto dto)
         {
@@ -36,6 +47,7 @@ namespace SmartMeeting.API.Controllers
             return CreatedAtAction(nameof(GetParticipant), new { id = participant.Id }, participant);
         }
 
+        // PUT: api/participants/{id}
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateParticipant(int id, ParticipantUpdateDto dto)
         {
@@ -44,6 +56,7 @@ namespace SmartMeeting.API.Controllers
             return NoContent();
         }
 
+        // DELETE: api/participants/{id}
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteParticipant(int id)
         {
@@ -52,3 +65,4 @@ namespace SmartMeeting.API.Controllers
         }
     }
 }
+
