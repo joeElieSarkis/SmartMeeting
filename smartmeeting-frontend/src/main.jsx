@@ -17,6 +17,13 @@ function RequireAuth({ children }) {
   return user ? children : <Navigate to="/" replace />;
 }
 
+// NEW: role gate
+function RequireRole({ role, children }) {
+  const user = getUser();
+  if (!user) return <Navigate to="/" replace />;
+  return user.role === role ? children : <Navigate to="/dashboard" replace />;
+}
+
 const router = createBrowserRouter([
   { path: '/', element: <Login /> },
   {
@@ -28,7 +35,9 @@ const router = createBrowserRouter([
       { path: '/meetings/active', element: <ActiveMeeting /> },
       { path: '/minutes', element: <MinutesEditor /> },
       { path: '/minutes/review', element: <MinutesReview /> },
-      { path: '/admin/rooms', element: <AdminRooms /> },
+
+      // 🔒 Admin-only route
+      { path: '/admin/rooms', element: <RequireRole role="Admin"><AdminRooms /></RequireRole> },
     ]
   }
 ])

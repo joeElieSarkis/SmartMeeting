@@ -3,6 +3,8 @@ import { getUser, logout } from "../auth";
 
 export default function AppLayout(){
   const user = getUser();
+  const isAdmin = user?.role === "Admin";
+
   return (
     <div>
       <header style={header}>
@@ -14,8 +16,10 @@ export default function AppLayout(){
           <Link to="/dashboard">Dashboard</Link>
           <Link to="/meetings/book">Book</Link>
           <Link to="/minutes">Minutes</Link>
-          <Link to="/admin/rooms">Rooms</Link>
-          <span style={{marginLeft:12, color:"#64748b"}}>{user?.name}</span>
+          {isAdmin && <Link to="/admin/rooms">Rooms</Link>}
+          <span style={{marginLeft:12, color:"#64748b"}}>
+            {user?.name} <RoleBadge role={user?.role} />
+          </span>
           <button className="btn ghost" onClick={logout}>Logout</button>
         </nav>
       </header>
@@ -25,7 +29,24 @@ export default function AppLayout(){
     </div>
   );
 }
+
+function RoleBadge({ role }) {
+  if (!role) return null;
+  const color = role === "Admin" ? "#16a34a" : role === "Employee" ? "#2563eb" : "#64748b";
+  return (
+    <span style={{
+      marginLeft: 8,
+      fontSize: 12,
+      padding: "2px 8px",
+      borderRadius: 999,
+      background: "#f1f5f9",
+      color
+    }}>
+      {role}
+    </span>
+  );
+}
+
 const header={position:"sticky",top:0,zIndex:10,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px",borderBottom:"1px solid #e5e7eb",background:"#fff"};
 const brand={display:"flex",gap:8,alignItems:"center",fontWeight:800};
 const nav={display:"flex",gap:12,alignItems:"center"};
-
