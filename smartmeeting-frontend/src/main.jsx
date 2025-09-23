@@ -10,7 +10,7 @@ import ActiveMeeting from './pages/ActiveMeeting.jsx'
 import MinutesEditor from './pages/MinutesEditor.jsx'
 import MinutesReview from './pages/MinutesReview.jsx'
 import AdminRooms from './pages/AdminRooms.jsx'
-import Profile from './pages/Profile.jsx'            // 👈 NEW
+import Profile from './pages/Profile.jsx'
 import './index.css'
 import { getUser } from './auth.js'
 
@@ -45,7 +45,7 @@ const router = createBrowserRouter([
       { path: '/meetings/active', element: <ActiveMeeting /> },
       { path: '/minutes', element: <MinutesEditor /> },
       { path: '/minutes/review', element: <MinutesReview /> },
-      { path: '/profile', element: <Profile /> },     // 👈 NEW
+      { path: '/profile', element: <Profile /> },
 
       // Admin-only route
       { path: '/admin/rooms', element: <RequireRole role="Admin"><AdminRooms /></RequireRole> },
