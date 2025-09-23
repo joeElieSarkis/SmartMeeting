@@ -60,8 +60,8 @@ export const api = {
   // ===== Users =====
   users: {
     all: () => jfetch("/api/users"),
-    byId: (id) => jfetch(`/api/users/${id}`), // 👈 NEW
-    update: (id, payload) =>                 // 👈 NEW
+    byId: (id) => jfetch(`/api/users/${id}`), // NEW
+    update: (id, payload) =>                 // NEW
       jfetch(`/api/users/${id}`, {
         method: "PUT",
         body: JSON.stringify(payload),
@@ -98,6 +98,7 @@ export const api = {
         method: "PUT",
         body: JSON.stringify(payload),
       }),
+    delete: (id) => jfetch(`/api/meetings/${id}`, { method: "DELETE" }), // NEW
   },
 
   // ===== Participants =====
