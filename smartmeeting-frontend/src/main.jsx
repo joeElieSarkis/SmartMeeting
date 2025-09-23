@@ -10,6 +10,7 @@ import ActiveMeeting from './pages/ActiveMeeting.jsx'
 import MinutesEditor from './pages/MinutesEditor.jsx'
 import MinutesReview from './pages/MinutesReview.jsx'
 import AdminRooms from './pages/AdminRooms.jsx'
+import Profile from './pages/Profile.jsx'            // 👈 NEW
 import './index.css'
 import { getUser } from './auth.js'
 
@@ -25,7 +26,7 @@ function RequireRole({ role, children }) {
   return user.role === role ? children : <Navigate to="/dashboard" replace />;
 }
 
-// NEW: disallow a specific role (e.g., Guest)
+// Disallow a specific role (e.g., Guest)
 function RequireNotRole({ role, children }) {
   const user = getUser();
   if (!user) return <Navigate to="/" replace />;
@@ -44,6 +45,7 @@ const router = createBrowserRouter([
       { path: '/meetings/active', element: <ActiveMeeting /> },
       { path: '/minutes', element: <MinutesEditor /> },
       { path: '/minutes/review', element: <MinutesReview /> },
+      { path: '/profile', element: <Profile /> },     // 👈 NEW
 
       // Admin-only route
       { path: '/admin/rooms', element: <RequireRole role="Admin"><AdminRooms /></RequireRole> },

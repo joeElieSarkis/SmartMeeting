@@ -19,6 +19,7 @@ export default function AppLayout(){
           {!isGuest && <Link to="/meetings/book">Book</Link>}
           <Link to="/minutes">Minutes</Link>
           {isAdmin && <Link to="/admin/rooms">Rooms</Link>}
+          <Link to="/profile">Profile</Link> {/* 👈 NEW */}
           <span style={{marginLeft:12, color:"#64748b"}}>
             {user?.name} <RoleBadge role={user?.role} />
           </span>
