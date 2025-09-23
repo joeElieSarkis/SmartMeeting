@@ -8,10 +8,8 @@ export default function MinutesEditor(){
   const navigate = useNavigate();
   const meetingId = Number(params.get("meetingId") || 0);
 
-  // meetings list for selector
   const [meetings, setMeetings] = useState([]);
   const [meetingsErr, setMeetingsErr] = useState("");
-
   const [list,setList] = useState([]);
   const [attachments, setAttachments] = useState([]);
   const [ok,setOk] = useState("");
@@ -23,10 +21,8 @@ export default function MinutesEditor(){
   });
 
   useEffect(()=>{
-    // load meetings for dropdown when no meetingId in URL
     api.meetings.all()
       .then(ms => {
-        // sort newest → oldest
         ms.sort((a,b)=> new Date(b.startTime) - new Date(a.startTime));
         setMeetings(ms);
       })
@@ -37,10 +33,9 @@ export default function MinutesEditor(){
     try { setList(await api.minutes.byMeeting(mid)); }
     catch { setErr("Failed to load minutes"); }
   }
-
   async function loadAttachments(mid){
     try { setAttachments(await api.attachments.byMeeting(mid)); }
-    catch { /* ignore */ }
+    catch {}
   }
 
   useEffect(()=>{
@@ -55,7 +50,6 @@ export default function MinutesEditor(){
   function onSelectMeeting(e){
     const mid = Number(e.target.value || 0);
     if(!mid) return;
-    // push /minutes?meetingId=mid so refresh/bookmarks work
     navigate(`/minutes?meetingId=${mid}`, { replace: true });
   }
 
@@ -82,6 +76,61 @@ export default function MinutesEditor(){
     }
   }
 
+  async function finalizeItem(id){
+    setOk(""); setErr("");
+    try{
+      await api.minutes.finalize(id);
+      setOk("Minutes finalized");
+      await loadMinutes(meetingId);
+    }catch(e){
+      setErr(e?.message || "Failed to finalize");
+    }
+  }
+
+  function shareToClipboard(){
+    const text = list.map(m =>
+      `• ${new Date(m.createdAt).toLocaleString()} — ${m.summary}` +
+      (m.taskDescription ? ` [Task: ${m.taskDescription} • ${m.taskStatus}${m.taskDueDate ? " • due " + new Date(m.taskDueDate).toLocaleDateString() : ""}]` : "") +
+      (m.isFinal ? " (FINAL)" : "")
+    ).join("\n");
+    navigator.clipboard.writeText(text).then(()=>setOk("Copied to clipboard")).catch(()=>setErr("Copy failed"));
+  }
+
+  function printMinutes(){
+    const html = `
+      <html>
+      <head>
+        <title>Minutes - Meeting ${meetingId}</title>
+        <style>
+          body{font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding:24px;}
+          h1{margin:0 0 12px;}
+          ul{padding-left:18px;}
+          li{margin-bottom:8px;}
+          .final{font-weight:bold; color:#166534;}
+        </style>
+      </head>
+      <body>
+        <h1>Minutes (Meeting #${meetingId})</h1>
+        <ul>
+          ${list.map(m => `
+            <li>
+              <div><strong>${new Date(m.createdAt).toLocaleString()}</strong> — ${escapeHtml(m.summary)} ${m.isFinal ? '<span class="final">[FINAL]</span>' : ''}</div>
+              ${m.taskDescription ? `<div>Task: ${escapeHtml(m.taskDescription)} • <strong>${m.taskStatus||""}</strong> ${m.taskDueDate ? `• due ${new Date(m.taskDueDate).toLocaleDateString()}` : ""}</div>` : ""}
+            </li>
+          `).join("")}
+        </ul>
+      </body>
+      </html>
+    `;
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    w.print();
+  }
+
   async function onUploadChange(e){
     setErr(""); setOk("");
     const file = e.target.files?.[0];
@@ -94,7 +143,7 @@ export default function MinutesEditor(){
     }catch(e){
       setErr("Upload failed");
     } finally {
-      e.target.value = ""; // reset file input
+      e.target.value = "";
     }
   }
 
@@ -114,11 +163,13 @@ export default function MinutesEditor(){
     [meetings, meetingId]
   );
 
+  // 🚦 Disable “Save Draft” if latest minutes is final
+  const latestIsFinal = list.length > 0 && !!list[list.length - 1].isFinal;
+
   return (
     <div className="grid" style={{gap:16}}>
       <h1 className="page-title">Minutes</h1>
 
-      {/* Meeting selector if no meetingId */}
       <div className="card">
         <h2 className="section-title">Select Meeting</h2>
         <div className="row" style={{gap:8, alignItems:"center"}}>
@@ -151,10 +202,13 @@ export default function MinutesEditor(){
             <input className="input" type="date" value={form.taskDueDate} onChange={e=>setForm({...form,taskDueDate:e.target.value})}/>
           </div>
           <div className="row">
-            <button className="btn" type="button" onClick={save} disabled={busy || !meetingId}>
+            <button className="btn" type="button" onClick={save} disabled={busy || !meetingId || latestIsFinal}>
               {busy ? "Saving…" : "Save Draft"}
             </button>
+            <button className="btn ghost" type="button" onClick={shareToClipboard} disabled={!list.length}>Share (Copy)</button>
+            <button className="btn ghost" type="button" onClick={printMinutes} disabled={!list.length}>Print / PDF</button>
           </div>
+          {latestIsFinal && <div style={{color:"var(--muted)"}}>This meeting has finalized minutes.</div>}
           {(ok || err) && <div style={{color: ok ? "var(--success)" : "var(--danger)"}}>{ok || err}</div>}
         </div>
       </div>
@@ -176,12 +230,29 @@ export default function MinutesEditor(){
       </div>
 
       <div className="card">
-        <h2 className="section-title">Entries</h2>
-        <ul style={{margin:0,paddingLeft:18}}>
+        <div className="row" style={{justifyContent:"space-between", alignItems:"center"}}>
+          <h2 className="section-title" style={{marginBottom:0}}>Entries</h2>
+        </div>
+        <ul style={{marginTop:12, paddingLeft:18}}>
           {list.map(mm => (
-            <li key={mm.id}>
-              <strong>{new Date(mm.createdAt).toLocaleString()}</strong> — {mm.summary}
-              {mm.taskDescription && <> • Task: {mm.taskDescription} ({mm.taskStatus})</>}
+            <li key={mm.id} style={{marginBottom:8}}>
+              <div style={{display:"flex", gap:8, alignItems:"center", flexWrap:"wrap"}}>
+                <strong>{new Date(mm.createdAt).toLocaleString()}</strong>
+                {mm.isFinal ? <span className="badge" style={{background:"#dcfce7", color:"#166534"}}>FINAL</span> : null}
+              </div>
+              <div>{mm.summary}</div>
+              {mm.taskDescription && (
+                <div style={{fontSize:14, color:"#334155"}}>
+                  Task: {mm.taskDescription} • <strong>{mm.taskStatus}</strong>
+                  {mm.taskDueDate && <> • due {new Date(mm.taskDueDate).toLocaleDateString()}</>}
+                  {mm.assignedTo && <> • assigned to #{mm.assignedTo}</>}
+                </div>
+              )}
+              {!mm.isFinal && (
+                <div className="row" style={{marginTop:6}}>
+                  <button className="btn ghost" type="button" onClick={()=>finalizeItem(mm.id)}>Finalize & Share</button>
+                </div>
+              )}
             </li>
           ))}
           {list.length===0 && <li>No minutes yet</li>}
@@ -189,4 +260,9 @@ export default function MinutesEditor(){
       </div>
     </div>
   );
+}
+
+/* helpers */
+function escapeHtml(s){
+  return String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }

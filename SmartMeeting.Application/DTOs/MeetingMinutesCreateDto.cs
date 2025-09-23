@@ -7,6 +7,7 @@
         public int? AssignedTo { get; set; }
         public string? TaskDescription { get; set; }
         public string? TaskStatus { get; set; }   // default handled in entity/service if null
+        public bool? IsFinal { get; set; }
         public DateTime? TaskDueDate { get; set; }
     }
 }

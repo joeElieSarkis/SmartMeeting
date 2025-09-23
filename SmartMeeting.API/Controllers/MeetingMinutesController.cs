@@ -66,6 +66,13 @@ namespace SmartMeeting.API.Controllers
             await _service.DeleteAsync(id);
             return NoContent();
         }
+
+        // PUT: api/meetingminutes/5/finalize
+        [HttpPut("{id:int}/finalize")]
+        public async Task<IActionResult> Finalize(int id)
+        {
+            await _service.FinalizeAsync(id);
+            return NoContent();
+        }
     }
 }
-

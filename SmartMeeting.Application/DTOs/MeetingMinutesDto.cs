@@ -9,6 +9,7 @@
         public string? TaskDescription { get; set; }
         public string? TaskStatus { get; set; }
         public DateTime? TaskDueDate { get; set; }
+        public bool IsFinal { get; set; }           
         public DateTime CreatedAt { get; set; }
     }
 }

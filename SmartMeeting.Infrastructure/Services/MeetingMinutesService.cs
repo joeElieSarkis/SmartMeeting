@@ -3,9 +3,6 @@ using SmartMeeting.Application.DTOs;
 using SmartMeeting.Application.Services;
 using SmartMeeting.Domain.Entities;
 using SmartMeeting.Infrastructure.Persistence;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace SmartMeeting.Infrastructure.Services
 {
@@ -22,13 +19,15 @@ namespace SmartMeeting.Infrastructure.Services
         {
             var mm = await _context.MeetingMinutes.FindAsync(id);
             if (mm == null) return null;
-
             return Map(mm);
         }
 
         public async Task<IEnumerable<MeetingMinutesDto>> GetAllAsync()
         {
-            var list = await _context.MeetingMinutes.AsNoTracking().ToListAsync();
+            var list = await _context.MeetingMinutes
+                .AsNoTracking()
+                .ToListAsync();
+
             return list.Select(Map);
         }
 
@@ -52,6 +51,7 @@ namespace SmartMeeting.Infrastructure.Services
                 TaskDescription = dto.TaskDescription,
                 TaskStatus = string.IsNullOrWhiteSpace(dto.TaskStatus) ? "Pending" : dto.TaskStatus,
                 TaskDueDate = dto.TaskDueDate,
+                IsFinal = false,               // drafts by default
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -73,6 +73,7 @@ namespace SmartMeeting.Infrastructure.Services
             mm.TaskStatus = dto.TaskStatus ?? mm.TaskStatus;
             mm.TaskDueDate = dto.TaskDueDate;
 
+            // IsFinal not touched here.
             await _context.SaveChangesAsync();
         }
 
@@ -85,6 +86,15 @@ namespace SmartMeeting.Infrastructure.Services
             await _context.SaveChangesAsync();
         }
 
+        public async Task FinalizeAsync(int id)
+        {
+            var mm = await _context.MeetingMinutes.FindAsync(id);
+            if (mm == null) throw new KeyNotFoundException("MeetingMinutes not found");
+
+            mm.IsFinal = true;
+            await _context.SaveChangesAsync();
+        }
+
         private static MeetingMinutesDto Map(MeetingMinutes mm) => new MeetingMinutesDto
         {
             Id = mm.Id,
@@ -94,6 +104,7 @@ namespace SmartMeeting.Infrastructure.Services
             TaskDescription = mm.TaskDescription,
             TaskStatus = mm.TaskStatus,
             TaskDueDate = mm.TaskDueDate,
+            IsFinal = mm.IsFinal,
             CreatedAt = mm.CreatedAt
         };
     }

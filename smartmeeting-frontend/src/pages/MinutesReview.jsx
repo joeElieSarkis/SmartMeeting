@@ -5,15 +5,14 @@ export default function MinutesReview(){
   const [meetings, setMeetings] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [minutes, setMinutes] = useState([]);
-  const [q, setQ] = useState(""); // search
-  const [from, setFrom] = useState(""); // yyyy-mm-dd
-  const [to, setTo] = useState("");   // yyyy-mm-dd
+  const [q, setQ] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [err, setErr] = useState("");
 
   useEffect(()=>{
     api.meetings.all()
       .then(ms => {
-        // sort newest → oldest
         ms.sort((a,b)=> new Date(b.startTime) - new Date(a.startTime));
         setMeetings(ms);
         if(ms.length) setSelectedId(ms[0].id);
@@ -21,16 +20,22 @@ export default function MinutesReview(){
       .catch(()=>setErr("Failed to load meetings"));
   },[]);
 
+  async function reloadMinutes(meetingId){
+    try {
+      const m = await api.minutes.byMeeting(meetingId);
+      setMinutes(m);
+    } catch {
+      setErr("Failed to load minutes");
+    }
+  }
+
   useEffect(()=>{
     if(!selectedId) return;
-    api.minutes.byMeeting(selectedId)
-      .then(setMinutes)
-      .catch(()=>setErr("Failed to load minutes"));
+    reloadMinutes(selectedId);
   },[selectedId]);
 
   const filtered = useMemo(()=>{
     let list = [...meetings];
-
     if (from) {
       const f = new Date(from + "T00:00:00");
       list = list.filter(m => new Date(m.startTime) >= f);
@@ -56,7 +61,7 @@ export default function MinutesReview(){
 
   function exportCSV(){
     const rows = [
-      ["Id","MeetingId","CreatedAt","Summary","TaskDescription","TaskStatus","TaskDueDate","AssignedTo"],
+      ["Id","MeetingId","CreatedAt","Summary","TaskDescription","TaskStatus","TaskDueDate","AssignedTo","IsFinal"],
       ...minutes.map(m => [
         safe(m.id),
         safe(m.meetingId),
@@ -66,6 +71,7 @@ export default function MinutesReview(){
         safe(m.taskStatus),
         safe(m.taskDueDate),
         safe(m.assignedTo),
+        m.isFinal ? "Yes" : "No"
       ])
     ];
     const csv = rows.map(r => r.map(csvCell).join(",")).join("\n");
@@ -75,9 +81,19 @@ export default function MinutesReview(){
   function shareToClipboard(){
     const text = minutes.map(m =>
       `• ${new Date(m.createdAt).toLocaleString()} — ${m.summary}` +
-      (m.taskDescription ? ` [Task: ${m.taskDescription} • ${m.taskStatus}${m.taskDueDate ? " • due " + new Date(m.taskDueDate).toLocaleDateString() : ""}]` : "")
+      (m.taskDescription ? ` [Task: ${m.taskDescription} • ${m.taskStatus}${m.taskDueDate ? " • due " + new Date(m.taskDueDate).toLocaleDateString() : ""}]` : "") +
+      (m.isFinal ? " (FINAL)" : "")
     ).join("\n");
     navigator.clipboard.writeText(text).catch(()=>{});
+  }
+
+  async function finalize(id){
+    try{
+      await api.minutes.finalize(id);
+      await reloadMinutes(selectedId);
+    }catch{
+      setErr("Finalize failed");
+    }
   }
 
   return (
@@ -85,7 +101,6 @@ export default function MinutesReview(){
       <h1 className="page-title">Minutes Review</h1>
       {err && <div style={{color:"crimson"}}>{err}</div>}
 
-      {/* Filters */}
       <div className="card">
         <h2 className="section-title">Filters</h2>
         <div className="row" style={{gap:8, flexWrap:"wrap"}}>
@@ -95,7 +110,6 @@ export default function MinutesReview(){
         </div>
       </div>
 
-      {/* Meetings list + Minutes details */}
       <div className="grid" style={{gap:16, gridTemplateColumns:"300px 1fr"}}>
         <div className="card" style={{maxHeight:500, overflow:"auto"}}>
           <h2 className="section-title">Past Meetings</h2>
@@ -136,7 +150,19 @@ export default function MinutesReview(){
             <ul style={{marginTop:12, paddingLeft:18}}>
               {minutes.map(mm => (
                 <li key={mm.id} style={{marginBottom:8}}>
-                  <div><strong>{new Date(mm.createdAt).toLocaleString()}</strong></div>
+                  <div className="row" style={{justifyContent:"space-between", alignItems:"center"}}>
+                    <div>
+                      <strong>{new Date(mm.createdAt).toLocaleString()}</strong>{" "}
+                      {mm.isFinal ? (
+                        <span className="badge" style={{background:"#dcfce7", color:"#166534"}}>FINAL</span>
+                      ) : (
+                        <span className="badge">Draft</span>
+                      )}
+                    </div>
+                    {!mm.isFinal && (
+                      <button className="btn ghost" onClick={()=>finalize(mm.id)}>Finalize</button>
+                    )}
+                  </div>
                   <div>{mm.summary}</div>
                   {mm.taskDescription && (
                     <div style={{fontSize:14, color:"#334155"}}>
@@ -167,4 +193,5 @@ function downloadBlob(blob, filename){
   a.href = url; a.download = filename; a.click();
   setTimeout(()=>URL.revokeObjectURL(url), 500);
 }
+
 
