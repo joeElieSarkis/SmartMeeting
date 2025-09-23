@@ -41,13 +41,15 @@ namespace SmartMeeting.API.Controllers
                 var createdMeeting = await _meetingService.CreateMeetingAsync(dto);
                 return CreatedAtAction(nameof(GetMeeting), new { id = createdMeeting.Id }, createdMeeting);
             }
-            catch (ArgumentException ex) // invalid start/end
+            catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                // e.g. overlap: "Room is already booked for the selected time."
+                return Conflict(new { message = ex.Message }); // 409
             }
-            catch (InvalidOperationException ex) // overlap
+            catch (ArgumentException ex)
             {
-                return Conflict(new { message = ex.Message });
+                // e.g. "End time must be after start time."
+                return BadRequest(new { message = ex.Message }); // 400
             }
         }
 
@@ -62,13 +64,15 @@ namespace SmartMeeting.API.Controllers
                 await _meetingService.UpdateMeetingAsync(dto);
                 return NoContent();
             }
-            catch (ArgumentException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
             catch (InvalidOperationException ex)
             {
-                return Conflict(new { message = ex.Message });
+                // overlap
+                return Conflict(new { message = ex.Message }); // 409
+            }
+            catch (ArgumentException ex)
+            {
+                // invalid time range
+                return BadRequest(new { message = ex.Message }); // 400
             }
             catch (KeyNotFoundException)
             {
@@ -92,4 +96,3 @@ namespace SmartMeeting.API.Controllers
         }
     }
 }
-

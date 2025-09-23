@@ -61,11 +61,16 @@ export default function MeetingBooking(){
       setForm({ title:"", agenda:"", date:"", start:"", end:"", roomId:"" });
       setSelectedUserIds([]);
     } catch (e) {
-      if (e?.status === 409 || e?.status === 400) setErr(e.message);
-      else setErr("Failed to create meeting");
-    } finally {
-      setBusy(false);
-    }
+  // Show backend message for overlap or bad input
+  if (e?.status === 409 || e?.status === 400) {
+    setErr(e.message);        // e.g. "Room is already booked for the selected time."
+  } else {
+    setErr("Failed to create meeting");
+  }
+} finally {
+  setBusy(false);
+}
+
   };
 
   return (
