@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
+import { getUser } from "../auth";
 
 export default function MinutesReview(){
   const [meetings, setMeetings] = useState([]);
@@ -9,6 +10,9 @@ export default function MinutesReview(){
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [err, setErr] = useState("");
+
+  const me = getUser();
+  const isGuest = me?.role === "Guest";
 
   useEffect(()=>{
     api.meetings.all()
@@ -88,6 +92,7 @@ export default function MinutesReview(){
   }
 
   async function finalize(id){
+    if (isGuest) { setErr("Guests cannot finalize minutes."); return; }
     try{
       await api.minutes.finalize(id);
       await reloadMinutes(selectedId);
@@ -100,6 +105,11 @@ export default function MinutesReview(){
     <div className="grid" style={{gap:16}}>
       <h1 className="page-title">Minutes Review</h1>
       {err && <div style={{color:"crimson"}}>{err}</div>}
+      {isGuest && (
+        <div className="card" style={{background:"#fff8e1", borderColor:"#facc15"}}>
+          Guests can view minutes but cannot finalize them.
+        </div>
+      )}
 
       <div className="card">
         <h2 className="section-title">Filters</h2>
@@ -159,7 +169,7 @@ export default function MinutesReview(){
                         <span className="badge">Draft</span>
                       )}
                     </div>
-                    {!mm.isFinal && (
+                    {!mm.isFinal && !isGuest && (
                       <button className="btn ghost" onClick={()=>finalize(mm.id)}>Finalize</button>
                     )}
                   </div>
@@ -193,5 +203,3 @@ function downloadBlob(blob, filename){
   a.href = url; a.download = filename; a.click();
   setTimeout(()=>URL.revokeObjectURL(url), 500);
 }
-
-

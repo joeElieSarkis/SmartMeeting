@@ -57,8 +57,8 @@ export default function MinutesEditor(){
   }
 
   async function save(){
-    if (isGuest) return;
     setOk(""); setErr(""); setBusy(true);
+    if (isGuest) { setErr("Guests can view minutes but cannot create or edit."); setBusy(false); return; }
     const user = getUser();
     if(!meetingId){ setErr("Please select a meeting first."); setBusy(false); return; }
     try{
@@ -81,8 +81,8 @@ export default function MinutesEditor(){
   }
 
   async function finalizeItem(id){
-    if (isGuest) return;
     setOk(""); setErr("");
+    if (isGuest) { setErr("Guests cannot finalize minutes."); return; }
     try{
       await api.minutes.finalize(id);
       setOk("Minutes finalized");
@@ -138,6 +138,7 @@ export default function MinutesEditor(){
 
   async function onUploadChange(e){
     setErr(""); setOk("");
+    if (isGuest) { setErr("Guests cannot upload attachments."); e.target.value=""; return; }
     const file = e.target.files?.[0];
     if(!file){ return; }
     if(!meetingId){ setErr("Please select a meeting first."); e.target.value=""; return; }
@@ -153,6 +154,7 @@ export default function MinutesEditor(){
   }
 
   async function removeAttachment(id){
+    if (isGuest) { setErr("Guests cannot delete attachments."); return; }
     if(!confirm("Delete this file?")) return;
     try{
       await api.attachments.delete(id);
@@ -168,16 +170,17 @@ export default function MinutesEditor(){
     [meetings, meetingId]
   );
 
+  // 🚦 Disable “Save Draft” if latest minutes is final OR guest
   const latestIsFinal = list.length > 0 && !!list[list.length - 1].isFinal;
+  const disableSave = latestIsFinal || isGuest;
 
   return (
     <div className="grid" style={{gap:16}}>
       <h1 className="page-title">Minutes</h1>
 
-      {/* Info banner for guests */}
       {isGuest && (
-        <div className="card" style={{ color:"#334155" }}>
-          You are signed in as <strong>Guest</strong>. This page is <strong>read-only</strong>.
+        <div className="card" style={{background:"#fff8e1", borderColor:"#facc15"}}>
+          Guests can view minutes and attachments, but cannot add, finalize, upload, or delete.
         </div>
       )}
 
@@ -201,31 +204,28 @@ export default function MinutesEditor(){
         )}
       </div>
 
-      {/* New Entry (hidden for Guest) */}
-      {!isGuest && (
-        <div className="card">
-          <h2 className="section-title">New Entry</h2>
-          <div className="grid" style={{gap:10}}>
-            <textarea className="input" rows="3" placeholder="Summary" value={form.summary} onChange={e=>setForm({...form,summary:e.target.value})}/>
-            <textarea className="input" rows="3" placeholder="Action / Task" value={form.taskDescription} onChange={e=>setForm({...form,taskDescription:e.target.value})}/>
-            <div className="row">
-              <select className="input" value={form.taskStatus} onChange={e=>setForm({...form,taskStatus:e.target.value})}>
-                <option>Pending</option><option>InProgress</option><option>Completed</option>
-              </select>
-              <input className="input" type="date" value={form.taskDueDate} onChange={e=>setForm({...form,taskDueDate:e.target.value})}/>
-            </div>
-            <div className="row">
-              <button className="btn" type="button" onClick={save} disabled={busy || !meetingId || latestIsFinal}>
-                {busy ? "Saving…" : "Save Draft"}
-              </button>
-              <button className="btn ghost" type="button" onClick={shareToClipboard} disabled={!list.length}>Share (Copy)</button>
-              <button className="btn ghost" type="button" onClick={printMinutes} disabled={!list.length}>Print / PDF</button>
-            </div>
-            {latestIsFinal && <div style={{color:"var(--muted)"}}>This meeting has finalized minutes.</div>}
-            {(ok || err) && <div style={{color: ok ? "var(--success)" : "var(--danger)"}}>{ok || err}</div>}
+      <div className="card">
+        <h2 className="section-title">New Entry</h2>
+        <div className="grid" style={{gap:10}}>
+          <textarea className="input" rows="3" placeholder="Summary" value={form.summary} onChange={e=>setForm({...form,summary:e.target.value})} disabled={isGuest}/>
+          <textarea className="input" rows="3" placeholder="Action / Task" value={form.taskDescription} onChange={e=>setForm({...form,taskDescription:e.target.value})} disabled={isGuest}/>
+          <div className="row">
+            <select className="input" value={form.taskStatus} onChange={e=>setForm({...form,taskStatus:e.target.value})} disabled={isGuest}>
+              <option>Pending</option><option>InProgress</option><option>Completed</option>
+            </select>
+            <input className="input" type="date" value={form.taskDueDate} onChange={e=>setForm({...form,taskDueDate:e.target.value})} disabled={isGuest}/>
           </div>
+          <div className="row">
+            <button className="btn" type="button" onClick={save} disabled={busy || !meetingId || disableSave}>
+              {busy ? "Saving…" : "Save Draft"}
+            </button>
+            <button className="btn ghost" type="button" onClick={shareToClipboard} disabled={!list.length}>Share (Copy)</button>
+            <button className="btn ghost" type="button" onClick={printMinutes} disabled={!list.length}>Print / PDF</button>
+          </div>
+          {latestIsFinal && <div style={{color:"var(--muted)"}}>This meeting has finalized minutes.</div>}
+          {(ok || err) && <div style={{color: ok ? "var(--success)" : "var(--danger)"}}>{ok || err}</div>}
         </div>
-      )}
+      </div>
 
       <div className="card">
         <h2 className="section-title">Attachments</h2>
@@ -236,7 +236,7 @@ export default function MinutesEditor(){
           {attachments.map(a => (
             <li key={a.id} style={{marginBottom:6}}>
               <a href={fileUrl(a.filePath)} target="_blank" rel="noreferrer">{a.fileName}</a>
-              {!isGuest && <button className="btn ghost" style={{marginLeft:8}} onClick={()=>removeAttachment(a.id)}>Delete</button>}
+              <button className="btn ghost" style={{marginLeft:8}} onClick={()=>removeAttachment(a.id)} disabled={isGuest}>Delete</button>
             </li>
           ))}
           {!attachments.length && <li style={{color:"var(--muted)"}}>No attachments yet</li>}
@@ -246,10 +246,6 @@ export default function MinutesEditor(){
       <div className="card">
         <div className="row" style={{justifyContent:"space-between", alignItems:"center"}}>
           <h2 className="section-title" style={{marginBottom:0}}>Entries</h2>
-          <div className="row" style={{gap:8}}>
-            <button className="btn ghost" type="button" onClick={shareToClipboard} disabled={!list.length}>Share</button>
-            <button className="btn ghost" type="button" onClick={printMinutes} disabled={!list.length}>Print</button>
-          </div>
         </div>
         <ul style={{marginTop:12, paddingLeft:18}}>
           {list.map(mm => (

@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System.IO;
+using Microsoft.EntityFrameworkCore;
 using SmartMeeting.Application.DTOs;
 using SmartMeeting.Application.Services;
 using SmartMeeting.Domain.Entities;
@@ -74,8 +75,30 @@ namespace SmartMeeting.Infrastructure.Services
             var att = await _context.Attachments.FindAsync(id);
             if (att == null) throw new KeyNotFoundException("Attachment not found");
 
+            // capture relative path before removing from DB
+            var relPath = att.FilePath;
+
             _context.Attachments.Remove(att);
             await _context.SaveChangesAsync();
+
+            // attempt to delete the physical file under wwwroot
+            if (!string.IsNullOrWhiteSpace(relPath))
+            {
+                try
+                {
+                    // FilePath is like "/uploads/{guid_filename.ext}"
+                    var cleaned = relPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+                    var fullPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", cleaned);
+                    if (File.Exists(fullPath))
+                    {
+                        File.Delete(fullPath);
+                    }
+                }
+                catch
+                {
+                    // swallow file I/O errors (optional: log)
+                }
+            }
         }
 
         private static AttachmentDto Map(Attachment a) => new AttachmentDto
@@ -87,4 +110,3 @@ namespace SmartMeeting.Infrastructure.Services
         };
     }
 }
-
