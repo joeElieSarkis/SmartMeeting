@@ -26,6 +26,12 @@ export default function Profile() {
 
   async function save() {
     setOk(""); setErr("");
+
+    // basic validation (added)
+    if (!form.name.trim()) { setErr("Name is required."); return; }
+    if (!form.email.trim()) { setErr("Email is required."); return; }
+
+    // your original password checks
     if (!form.password) { setErr("Please enter a new password to save changes."); return; }
     if (form.password.length < 6) { setErr("Password must be at least 6 characters."); return; }
     if (form.password !== form.confirm) { setErr("Passwords do not match."); return; }
@@ -39,17 +45,14 @@ export default function Profile() {
         name: form.name.trim(),
         role, // keep existing role
       });
-      // Refresh cached user for header display
+
+      // refresh localStorage with the full fresh server copy (improved)
       const updated = await api.users.byId(form.id);
       const cached = getUser();
       if (cached) {
-        localStorage.setItem("sm_user", JSON.stringify({
-          ...cached,
-          name: updated.name,
-          email: updated.email,
-          role: updated.role
-        }));
+        localStorage.setItem("sm_user", JSON.stringify({ ...cached, ...updated }));
       }
+
       setForm({ ...form, password: "", confirm: "" });
       setOk("Profile updated.");
     } catch (e) {
@@ -72,7 +75,7 @@ export default function Profile() {
 
           <label>
             <div style={{ fontSize: 12, color: "var(--muted)" }}>Email</div>
-            <input className="input" value={form.email} onChange={e=>setForm({...form, email:e.target.value})}/>
+            <input className="input" type="email" value={form.email} onChange={e=>setForm({...form, email:e.target.value})}/>
           </label>
 
           <div style={{ fontSize: 12, color: "var(--muted)" }}>Role</div>
