@@ -47,6 +47,15 @@ export const api = {
         method: "POST",
         body: JSON.stringify(payload),
       }),
+    update: (id, payload) =>
+      jfetch(`/api/rooms/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      }),
+    delete: (id) =>
+      jfetch(`/api/rooms/${id}`, {
+        method: "DELETE",
+      }),
   },
 
   // ===== Meetings =====
