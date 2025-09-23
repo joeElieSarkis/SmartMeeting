@@ -41,14 +41,19 @@ namespace SmartMeeting.API.Controllers
                 var createdMeeting = await _meetingService.CreateMeetingAsync(dto);
                 return CreatedAtAction(nameof(GetMeeting), new { id = createdMeeting.Id }, createdMeeting);
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                // guest trying to schedule
+                return StatusCode(403, new { message = ex.Message });
+            }
             catch (InvalidOperationException ex)
             {
-                // e.g. overlap: "Room is already booked for the selected time."
+                // overlap: "Room is already booked for the selected time."
                 return Conflict(new { message = ex.Message }); // 409
             }
             catch (ArgumentException ex)
             {
-                // e.g. "End time must be after start time."
+                // e.g. "End time must be after start time." or "Organizer not found."
                 return BadRequest(new { message = ex.Message }); // 400
             }
         }
@@ -63,6 +68,10 @@ namespace SmartMeeting.API.Controllers
             {
                 await _meetingService.UpdateMeetingAsync(dto);
                 return NoContent();
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return StatusCode(403, new { message = ex.Message });
             }
             catch (InvalidOperationException ex)
             {

@@ -37,6 +37,16 @@ namespace SmartMeeting.Infrastructure.Services
             return query.AnyAsync();
         }
 
+        private async Task EnsureOrganizerCanScheduleAsync(int organizerId)
+        {
+            var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == organizerId);
+            if (user == null)
+                throw new ArgumentException("Organizer not found.");
+
+            if (string.Equals(user.Role, "Guest", StringComparison.OrdinalIgnoreCase))
+                throw new UnauthorizedAccessException("Guests are not allowed to schedule or modify meetings.");
+        }
+
         // ---- Queries ----
         public async Task<MeetingDto?> GetMeetingByIdAsync(int id)
         {
@@ -77,10 +87,11 @@ namespace SmartMeeting.Infrastructure.Services
         // ---- Commands ----
         public async Task<MeetingDto> CreateMeetingAsync(MeetingCreateDto dto)
         {
-            // 1) Validate requested time range
+            // block guests + validate inputs
+            await EnsureOrganizerCanScheduleAsync(dto.OrganizerId);
             ValidateTimes(dto.StartTime, dto.EndTime);
 
-            // 2) Prevent double booking in the same room
+            // prevent double booking
             if (await HasOverlapAsync(dto.RoomId, dto.StartTime, dto.EndTime))
                 throw new InvalidOperationException("Room is already booked for the selected time.");
 
@@ -115,13 +126,14 @@ namespace SmartMeeting.Infrastructure.Services
 
         public async Task UpdateMeetingAsync(MeetingUpdateDto dto)
         {
-            // 1) Validate requested time range
+            // block guests + validate inputs
+            await EnsureOrganizerCanScheduleAsync(dto.OrganizerId);
             ValidateTimes(dto.StartTime, dto.EndTime);
 
             var meeting = await _context.Meetings.FindAsync(dto.Id);
             if (meeting == null) throw new KeyNotFoundException("Meeting not found");
 
-            // 2) Prevent double booking (exclude the current meeting)
+            // prevent double booking (exclude current)
             if (await HasOverlapAsync(dto.RoomId, dto.StartTime, dto.EndTime, excludeMeetingId: dto.Id))
                 throw new InvalidOperationException("Room is already booked for the selected time.");
 
