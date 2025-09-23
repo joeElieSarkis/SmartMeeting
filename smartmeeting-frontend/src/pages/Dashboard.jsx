@@ -7,21 +7,22 @@ export default function Dashboard() {
   const [meetings, setMeetings] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [err, setErr] = useState("");
-  const [ok, setOk] = useState("");
   const [loading, setLoading] = useState(true);
-
-  // Edit / Cancel state
-  const [editing, setEditing] = useState(null); // the meeting being edited
-  const [editForm, setEditForm] = useState({ id: 0, title: "", agenda: "", date: "", start: "", end: "", roomId: "" });
-  const [busyEdit, setBusyEdit] = useState(false);
-
   const nav = useNavigate();
   const user = getUser();
 
+  // edit modal state
+  const [editOpen, setEditOpen] = useState(false);
+  const [edit, setEdit] = useState({
+    id: 0, title: "", agenda: "", date: "", start: "", end: "", roomId: "", organizerId: 0
+  });
+  const [editErr, setEditErr] = useState("");
+  const [editBusy, setEditBusy] = useState(false);
+
   async function load() {
-    setErr(""); setOk(""); setLoading(true);
+    setErr(""); setLoading(true);
     try {
-      const [ms, rs] = await Promise.all([ api.meetings.all(), api.rooms.all() ]);
+      const [ms, rs] = await Promise.all([api.meetings.all(), api.rooms.all()]);
       ms.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
       setMeetings(ms);
       setRooms(rs);
@@ -53,17 +54,22 @@ export default function Dashboard() {
   // Notifications
   const notifications = useMemo(() => {
     const notes = [];
-    if (todayMeetings.length) notes.push(`You have ${todayMeetings.length} meeting${todayMeetings.length>1?"s":""} today.`);
-    else notes.push("No meetings today.");
-    if (nextMeeting) notes.push(`Next: “${nextMeeting.title}” at ${new Date(nextMeeting.startTime).toLocaleTimeString()}`);
+    if (todayMeetings.length) {
+      notes.push(`You have ${todayMeetings.length} meeting${todayMeetings.length>1?"s":""} today.`);
+    } else {
+      notes.push("No meetings today.");
+    }
+    if (nextMeeting) {
+      notes.push(`Next: “${nextMeeting.title}” at ${new Date(nextMeeting.startTime).toLocaleTimeString()}`);
+    }
     return notes;
   }, [todayMeetings, nextMeeting]);
 
-  // Build room availability map for today
+  // Room availability (today)
   const roomBlocks = useMemo(() => {
     const start = startOfDay(new Date());
     const end = endOfDay(new Date());
-    const map = new Map(); // roomId -> [{start,end,title}]
+    const map = new Map();
     rooms.forEach(r => map.set(r.id, []));
     meetings.forEach(m => {
       const ms = new Date(m.startTime);
@@ -83,61 +89,61 @@ export default function Dashboard() {
     nav(`/meetings/active?id=${nextMeeting.id}`);
   }
 
-  // ----- Reschedule / Cancel helpers -----
+  // ----- Reschedule (open modal) -----
   function openEdit(m) {
-    const s = new Date(m.startTime);
-    const e = new Date(m.endTime);
-    setEditing(m);
-    setEditForm({
+    setEditErr("");
+    setEdit({
       id: m.id,
       title: m.title || "",
       agenda: m.agenda || "",
-      date: toYMD(s),
-      start: toHM(s),
-      end: toHM(e),
-      roomId: String(m.roomId || "")
+      date: toLocalDateValue(m.startTime),
+      start: toLocalTimeValue(m.startTime),
+      end: toLocalTimeValue(m.endTime),
+      roomId: String(m.roomId),
+      organizerId: m.organizerId
     });
-    setErr(""); setOk("");
-  }
-  function closeEdit() {
-    setEditing(null);
+    setEditOpen(true);
   }
 
+  // ----- Reschedule (save) -----
   async function saveEdit() {
-    if (!editing) return;
-    setBusyEdit(true); setErr(""); setOk("");
+    setEditErr("");
+    if (!edit.title.trim()) return setEditErr("Title is required.");
+    if (!edit.date || !edit.start || !edit.end) return setEditErr("Date & time are required.");
+    if (!edit.roomId) return setEditErr("Room is required.");
+
+    setEditBusy(true);
     try {
-      const payload = {
-        id: editForm.id,
-        title: editForm.title.trim(),
-        agenda: editForm.agenda.trim(),
-        organizerId: editing.organizerId,
-        roomId: Number(editForm.roomId || 0),
-        startTime: `${editForm.date}T${editForm.start}:00`, // local time strings like booking page
-        endTime: `${editForm.date}T${editForm.end}:00`,
-        status: editing.status || "Scheduled"
-      };
-      await api.meetings.update(editForm.id, payload);
-      setOk("Meeting updated");
-      closeEdit();
+      const startTime = `${edit.date}T${edit.start}:00`;
+      const endTime   = `${edit.date}T${edit.end}:00`;
+      await api.meetings.update(edit.id, {
+        id: edit.id,
+        title: edit.title.trim(),
+        agenda: edit.agenda,
+        organizerId: edit.organizerId,
+        roomId: Number(edit.roomId),
+        startTime,
+        endTime
+        // status: keep as-is
+      });
+      setEditOpen(false);
       await load();
     } catch (e) {
-      // surface server messages (409 overlap, 400 invalid range)
-      setErr(e?.message || "Failed to update meeting");
+      // show backend message (overlap/validation)
+      setEditErr(e?.message || "Update failed");
     } finally {
-      setBusyEdit(false);
+      setEditBusy(false);
     }
   }
 
+  // ----- Cancel meeting -----
   async function cancelMeeting(id) {
-    if (!confirm("Cancel this meeting?")) return;
-    setErr(""); setOk("");
+    if (!confirm("Cancel (delete) this meeting?")) return;
     try {
       await api.meetings.delete(id);
-      setOk("Meeting canceled");
       await load();
     } catch (e) {
-      setErr(e?.message || "Failed to cancel meeting");
+      alert(e?.message || "Failed to cancel meeting");
     }
   }
 
@@ -145,11 +151,7 @@ export default function Dashboard() {
     <div style={page}>
       <h1 style={title}>Dashboard</h1>
 
-      {(ok || err) && (
-        <div className="card" style={{ marginBottom: 12, color: ok ? "var(--success)" : "crimson" }}>
-          {ok || err}
-        </div>
-      )}
+      {err && <div style={{color:"crimson", marginBottom:12}}>{err}</div>}
       {loading && <div className="card">Loading…</div>}
 
       {/* Notifications */}
@@ -160,7 +162,7 @@ export default function Dashboard() {
         </ul>
       </section>
 
-      {/* Upcoming Meetings */}
+      {/* Upcoming Meetings (with Reschedule/Cancel) */}
       <section style={card}>
         <h2 style={h2}>Upcoming Meetings</h2>
         <ul style={{margin:0, paddingLeft:0, listStyle:"none"}}>
@@ -177,7 +179,7 @@ export default function Dashboard() {
                 <div style={{marginTop:6, display:"flex", gap:8, flexWrap:"wrap"}}>
                   <Link className="btn ghost" to={`/meetings/active?id=${m.id}`}>Open</Link>
                   <Link className="btn ghost" to={`/minutes?meetingId=${m.id}`}>Minutes</Link>
-                  <button className="btn ghost" onClick={()=>openEdit(m)}>Edit</button>
+                  <button className="btn ghost" onClick={()=>openEdit(m)}>Reschedule</button>
                   <button className="btn ghost" onClick={()=>cancelMeeting(m.id)}>Cancel</button>
                 </div>
               </li>
@@ -250,30 +252,37 @@ export default function Dashboard() {
         )}
       </section>
 
-      {/* Edit Modal */}
-      {editing && (
-        <div style={overlay}>
-          <div className="card" style={modal}>
-            <h2 style={h2}>Reschedule / Edit</h2>
-            <div className="grid" style={{ gap: 10 }}>
-              <input className="input" placeholder="Title" value={editForm.title} onChange={e=>setEditForm({...editForm, title:e.target.value})} />
-              <textarea className="input" rows="3" placeholder="Agenda" value={editForm.agenda} onChange={e=>setEditForm({...editForm, agenda:e.target.value})} />
+      {/* Reschedule Modal */}
+      {editOpen && (
+        <div style={modalBackdrop}>
+          <div style={modalCard}>
+            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8}}>
+              <h3 style={{margin:0}}>Reschedule</h3>
+              <button className="btn ghost" onClick={()=>setEditOpen(false)}>Close</button>
+            </div>
+            <div className="grid" style={{gap:10}}>
+              <input className="input" placeholder="Title" value={edit.title} onChange={e=>setEdit({...edit, title:e.target.value})}/>
+              <textarea className="input" rows="3" placeholder="Agenda" value={edit.agenda} onChange={e=>setEdit({...edit, agenda:e.target.value})}/>
               <div className="row">
-                <input className="input" type="date" value={editForm.date} onChange={e=>setEditForm({...editForm, date:e.target.value})} />
-                <input className="input" type="time" value={editForm.start} onChange={e=>setEditForm({...editForm, start:e.target.value})} />
-                <input className="input" type="time" value={editForm.end} onChange={e=>setEditForm({...editForm, end:e.target.value})} />
+                <input className="input" type="date" value={edit.date} onChange={e=>setEdit({...edit, date:e.target.value})}/>
+                <input className="input" type="time" value={edit.start} onChange={e=>setEdit({...edit, start:e.target.value})}/>
+                <input className="input" type="time" value={edit.end} onChange={e=>setEdit({...edit, end:e.target.value})}/>
               </div>
-              <select className="input" value={editForm.roomId} onChange={e=>setEditForm({...editForm, roomId:e.target.value})}>
+              <select className="input" value={edit.roomId} onChange={e=>setEdit({...edit, roomId:e.target.value})}>
                 <option value="">Select Room</option>
                 {rooms.map(r => <option key={r.id} value={r.id}>{r.name} ({r.capacity})</option>)}
               </select>
 
+              {editErr && <div style={{color:"var(--danger)"}}>{editErr}</div>}
+
               <div className="row">
-                <button className="btn" onClick={saveEdit} disabled={busyEdit}>{busyEdit ? "Updating…" : "Save Changes"}</button>
-                <button className="btn ghost" onClick={closeEdit}>Close</button>
+                <button className="btn" onClick={saveEdit} disabled={editBusy}>
+                  {editBusy ? "Saving…" : "Save"}
+                </button>
+                <button className="btn ghost" onClick={()=>setEditOpen(false)}>Cancel</button>
               </div>
-              <div style={{ color: "var(--muted)" }}>
-                Conflicts are prevented by the server. If the time overlaps, you’ll see an error.
+              <div style={{color:"#64748b", fontSize:12}}>
+                Tip: You’ll see a conflict message if the room is double-booked.
               </div>
             </div>
           </div>
@@ -288,14 +297,20 @@ function timeRange(start, end){
   const s = new Date(start), e = new Date(end);
   return `${pad2(s.getHours())}:${pad2(s.getMinutes())}–${pad2(e.getHours())}:${pad2(e.getMinutes())}`;
 }
+function toLocalDateValue(dt){
+  const d = new Date(dt);
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+}
+function toLocalTimeValue(dt){
+  const d = new Date(dt);
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
 function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
 function endOfDay(d){ const x=new Date(d); x.setHours(23,59,59,999); return x; }
 function pad2(n){ return String(n).padStart(2,"0"); }
 function formatDate(d){
   return d.toLocaleDateString(undefined, { weekday:"short", year:"numeric", month:"short", day:"numeric" });
 }
-function toYMD(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
-function toHM(d){ return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
 
 /* styles */
 const page = { minHeight:"100vh", background:"#f8fafc", color:"#0f172a", padding:"20px", fontFamily:"system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif" };
@@ -305,8 +320,11 @@ const h2 = { fontSize:16, fontWeight:700, marginTop:0, marginBottom:12 };
 const grid = { display:"grid", gap:12, gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))", marginBottom:16 };
 const rowLink = { textDecoration:"none", color:"#0f172a" };
 
-const overlay = {
-  position: "fixed", inset: 0, background: "rgba(0,0,0,0.25)",
-  display: "flex", alignItems: "center", justifyContent: "center", padding: 12, zIndex: 50
+const modalBackdrop = {
+  position:"fixed", inset:0, background:"rgba(0,0,0,0.35)",
+  display:"flex", alignItems:"center", justifyContent:"center", padding:16, zIndex:1000
 };
-const modal = { width: "100%", maxWidth: 560 };
+const modalCard = {
+  background:"#fff", border:"1px solid var(--border)", borderRadius:12, boxShadow:"0 10px 30px rgba(0,0,0,.15)",
+  width:"min(640px, 100%)", padding:16
+};
