@@ -4,6 +4,7 @@ import { getUser, logout } from "../auth";
 export default function AppLayout(){
   const user = getUser();
   const isAdmin = user?.role === "Admin";
+  const isGuest = user?.role === "Guest";
 
   return (
     <div>
@@ -14,11 +15,10 @@ export default function AppLayout(){
         </div>
         <nav style={nav}>
           <Link to="/dashboard">Dashboard</Link>
-          <Link to="/calendar">Calendar</Link> 
-          <Link to="/meetings/book">Book</Link>
+          <Link to="/calendar">Calendar</Link>
+          {!isGuest && <Link to="/meetings/book">Book</Link>}
           <Link to="/minutes">Minutes</Link>
           {isAdmin && <Link to="/admin/rooms">Rooms</Link>}
-          <Link to="/profile">Profile</Link> 
           <span style={{marginLeft:12, color:"#64748b"}}>
             {user?.name} <RoleBadge role={user?.role} />
           </span>

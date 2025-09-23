@@ -10,7 +10,6 @@ import ActiveMeeting from './pages/ActiveMeeting.jsx'
 import MinutesEditor from './pages/MinutesEditor.jsx'
 import MinutesReview from './pages/MinutesReview.jsx'
 import AdminRooms from './pages/AdminRooms.jsx'
-import Profile from './pages/Profile.jsx' // 👈 NEW
 import './index.css'
 import { getUser } from './auth.js'
 
@@ -19,11 +18,18 @@ function RequireAuth({ children }) {
   return user ? children : <Navigate to="/" replace />;
 }
 
-// Role gate helper
+// Role gate helper (exact match)
 function RequireRole({ role, children }) {
   const user = getUser();
   if (!user) return <Navigate to="/" replace />;
   return user.role === role ? children : <Navigate to="/dashboard" replace />;
+}
+
+// NEW: disallow a specific role (e.g., Guest)
+function RequireNotRole({ role, children }) {
+  const user = getUser();
+  if (!user) return <Navigate to="/" replace />;
+  return user.role === role ? <Navigate to="/dashboard" replace /> : children;
 }
 
 const router = createBrowserRouter([
@@ -34,11 +40,10 @@ const router = createBrowserRouter([
     children: [
       { path: '/dashboard', element: <Dashboard /> },
       { path: '/calendar', element: <CalendarView /> },
-      { path: '/meetings/book', element: <MeetingBooking /> },
+      { path: '/meetings/book', element: <RequireNotRole role="Guest"><MeetingBooking /></RequireNotRole> },
       { path: '/meetings/active', element: <ActiveMeeting /> },
       { path: '/minutes', element: <MinutesEditor /> },
       { path: '/minutes/review', element: <MinutesReview /> },
-      { path: '/profile', element: <Profile /> }, // 👈 NEW
 
       // Admin-only route
       { path: '/admin/rooms', element: <RequireRole role="Admin"><AdminRooms /></RequireRole> },

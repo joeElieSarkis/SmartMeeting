@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api";
 import { getUser } from "../auth";
 
 export default function MeetingBooking(){
+  const me = getUser();
+  const isGuest = me?.role === "Guest";
+
   const [rooms,setRooms] = useState([]);
   const [users,setUsers] = useState([]);
   const [selectedUserIds, setSelectedUserIds] = useState([]);
@@ -29,14 +33,13 @@ export default function MeetingBooking(){
       setErr(""); setOk(""); setBusy(true);
       const me = getUser();
       if(!me) { setErr("Not logged in"); return; }
+      if(isGuest){ setErr("Guests cannot book meetings."); return; }
       if(!form.roomId) { setErr("Please select a room"); return; }
       if(!form.date || !form.start || !form.end) { setErr("Please select date & time"); return; }
 
-      // Send LOCAL times (no UTC conversion) so UI matches chosen clock
       const startTime = `${form.date}T${form.start}:00`;
       const endTime   = `${form.date}T${form.end}:00`;
 
-      // 1) Create meeting
       const created = await api.meetings.create({
         title: form.title,
         agenda: form.agenda,
@@ -47,31 +50,39 @@ export default function MeetingBooking(){
         status: "Scheduled"
       });
 
-      // 2) Create participants for selected users
       const uniqueIds = Array.from(new Set(selectedUserIds));
       if (uniqueIds.length) {
-        await Promise.all(
-          uniqueIds.map(uid =>
-            api.participants.create({ meetingId: created.id, userId: uid })
-          )
-        );
+        await Promise.all(uniqueIds.map(uid =>
+          api.participants.create({ meetingId: created.id, userId: uid })
+        ));
       }
 
       setOk("Meeting booked!");
       setForm({ title:"", agenda:"", date:"", start:"", end:"", roomId:"" });
       setSelectedUserIds([]);
     } catch (e) {
-  // Show backend message for overlap or bad input
-  if (e?.status === 409 || e?.status === 400) {
-    setErr(e.message);        // e.g. "Room is already booked for the selected time."
-  } else {
-    setErr("Failed to create meeting");
-  }
-} finally {
-  setBusy(false);
-}
-
+      if (e?.status === 409 || e?.status === 400) setErr(e.message);
+      else setErr("Failed to create meeting");
+    } finally {
+      setBusy(false);
+    }
   };
+
+  // Hard block page for guests (message + links)
+  if (isGuest) {
+    return (
+      <div className="grid" style={{ gap: 16 }}>
+        <h1 className="page-title">Book a Meeting</h1>
+        <div className="card" style={{ color:"#334155" }}>
+          You are signed in as <strong>Guest</strong>. Booking is disabled for your role.
+          <div className="row" style={{ marginTop: 8 }}>
+            <Link className="btn ghost" to="/calendar">View Calendar</Link>
+            <Link className="btn ghost" to="/minutes/review">View Minutes</Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="grid" style={{gap:16}}>
@@ -134,5 +145,3 @@ export default function MeetingBooking(){
     </div>
   );
 }
-
-

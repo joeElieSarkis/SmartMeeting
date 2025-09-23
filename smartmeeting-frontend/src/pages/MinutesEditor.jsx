@@ -8,6 +8,9 @@ export default function MinutesEditor(){
   const navigate = useNavigate();
   const meetingId = Number(params.get("meetingId") || 0);
 
+  const me = getUser();
+  const isGuest = me?.role === "Guest";
+
   const [meetings, setMeetings] = useState([]);
   const [meetingsErr, setMeetingsErr] = useState("");
   const [list,setList] = useState([]);
@@ -54,6 +57,7 @@ export default function MinutesEditor(){
   }
 
   async function save(){
+    if (isGuest) return;
     setOk(""); setErr(""); setBusy(true);
     const user = getUser();
     if(!meetingId){ setErr("Please select a meeting first."); setBusy(false); return; }
@@ -77,6 +81,7 @@ export default function MinutesEditor(){
   }
 
   async function finalizeItem(id){
+    if (isGuest) return;
     setOk(""); setErr("");
     try{
       await api.minutes.finalize(id);
@@ -163,12 +168,18 @@ export default function MinutesEditor(){
     [meetings, meetingId]
   );
 
-  // 🚦 Disable “Save Draft” if latest minutes is final
   const latestIsFinal = list.length > 0 && !!list[list.length - 1].isFinal;
 
   return (
     <div className="grid" style={{gap:16}}>
       <h1 className="page-title">Minutes</h1>
+
+      {/* Info banner for guests */}
+      {isGuest && (
+        <div className="card" style={{ color:"#334155" }}>
+          You are signed in as <strong>Guest</strong>. This page is <strong>read-only</strong>.
+        </div>
+      )}
 
       <div className="card">
         <h2 className="section-title">Select Meeting</h2>
@@ -190,39 +201,42 @@ export default function MinutesEditor(){
         )}
       </div>
 
-      <div className="card">
-        <h2 className="section-title">New Entry</h2>
-        <div className="grid" style={{gap:10}}>
-          <textarea className="input" rows="3" placeholder="Summary" value={form.summary} onChange={e=>setForm({...form,summary:e.target.value})}/>
-          <textarea className="input" rows="3" placeholder="Action / Task" value={form.taskDescription} onChange={e=>setForm({...form,taskDescription:e.target.value})}/>
-          <div className="row">
-            <select className="input" value={form.taskStatus} onChange={e=>setForm({...form,taskStatus:e.target.value})}>
-              <option>Pending</option><option>InProgress</option><option>Completed</option>
-            </select>
-            <input className="input" type="date" value={form.taskDueDate} onChange={e=>setForm({...form,taskDueDate:e.target.value})}/>
+      {/* New Entry (hidden for Guest) */}
+      {!isGuest && (
+        <div className="card">
+          <h2 className="section-title">New Entry</h2>
+          <div className="grid" style={{gap:10}}>
+            <textarea className="input" rows="3" placeholder="Summary" value={form.summary} onChange={e=>setForm({...form,summary:e.target.value})}/>
+            <textarea className="input" rows="3" placeholder="Action / Task" value={form.taskDescription} onChange={e=>setForm({...form,taskDescription:e.target.value})}/>
+            <div className="row">
+              <select className="input" value={form.taskStatus} onChange={e=>setForm({...form,taskStatus:e.target.value})}>
+                <option>Pending</option><option>InProgress</option><option>Completed</option>
+              </select>
+              <input className="input" type="date" value={form.taskDueDate} onChange={e=>setForm({...form,taskDueDate:e.target.value})}/>
+            </div>
+            <div className="row">
+              <button className="btn" type="button" onClick={save} disabled={busy || !meetingId || latestIsFinal}>
+                {busy ? "Saving…" : "Save Draft"}
+              </button>
+              <button className="btn ghost" type="button" onClick={shareToClipboard} disabled={!list.length}>Share (Copy)</button>
+              <button className="btn ghost" type="button" onClick={printMinutes} disabled={!list.length}>Print / PDF</button>
+            </div>
+            {latestIsFinal && <div style={{color:"var(--muted)"}}>This meeting has finalized minutes.</div>}
+            {(ok || err) && <div style={{color: ok ? "var(--success)" : "var(--danger)"}}>{ok || err}</div>}
           </div>
-          <div className="row">
-            <button className="btn" type="button" onClick={save} disabled={busy || !meetingId || latestIsFinal}>
-              {busy ? "Saving…" : "Save Draft"}
-            </button>
-            <button className="btn ghost" type="button" onClick={shareToClipboard} disabled={!list.length}>Share (Copy)</button>
-            <button className="btn ghost" type="button" onClick={printMinutes} disabled={!list.length}>Print / PDF</button>
-          </div>
-          {latestIsFinal && <div style={{color:"var(--muted)"}}>This meeting has finalized minutes.</div>}
-          {(ok || err) && <div style={{color: ok ? "var(--success)" : "var(--danger)"}}>{ok || err}</div>}
         </div>
-      </div>
+      )}
 
       <div className="card">
         <h2 className="section-title">Attachments</h2>
         <div className="row" style={{gap:8, alignItems:"center"}}>
-          <input type="file" onChange={onUploadChange} disabled={!meetingId} />
+          <input type="file" onChange={onUploadChange} disabled={!meetingId || isGuest} />
         </div>
         <ul style={{marginTop:12, paddingLeft:18}}>
           {attachments.map(a => (
             <li key={a.id} style={{marginBottom:6}}>
               <a href={fileUrl(a.filePath)} target="_blank" rel="noreferrer">{a.fileName}</a>
-              <button className="btn ghost" style={{marginLeft:8}} onClick={()=>removeAttachment(a.id)}>Delete</button>
+              {!isGuest && <button className="btn ghost" style={{marginLeft:8}} onClick={()=>removeAttachment(a.id)}>Delete</button>}
             </li>
           ))}
           {!attachments.length && <li style={{color:"var(--muted)"}}>No attachments yet</li>}
@@ -232,13 +246,17 @@ export default function MinutesEditor(){
       <div className="card">
         <div className="row" style={{justifyContent:"space-between", alignItems:"center"}}>
           <h2 className="section-title" style={{marginBottom:0}}>Entries</h2>
+          <div className="row" style={{gap:8}}>
+            <button className="btn ghost" type="button" onClick={shareToClipboard} disabled={!list.length}>Share</button>
+            <button className="btn ghost" type="button" onClick={printMinutes} disabled={!list.length}>Print</button>
+          </div>
         </div>
         <ul style={{marginTop:12, paddingLeft:18}}>
           {list.map(mm => (
             <li key={mm.id} style={{marginBottom:8}}>
               <div style={{display:"flex", gap:8, alignItems:"center", flexWrap:"wrap"}}>
                 <strong>{new Date(mm.createdAt).toLocaleString()}</strong>
-                {mm.isFinal ? <span className="badge" style={{background:"#dcfce7", color:"#166534"}}>FINAL</span> : null}
+                {mm.isFinal ? <span className="badge" style={{background:"#dcfce7", color:"#166534"}}>FINAL</span> : <span className="badge">Draft</span>}
               </div>
               <div>{mm.summary}</div>
               {mm.taskDescription && (
@@ -248,7 +266,7 @@ export default function MinutesEditor(){
                   {mm.assignedTo && <> • assigned to #{mm.assignedTo}</>}
                 </div>
               )}
-              {!mm.isFinal && (
+              {!mm.isFinal && !isGuest && (
                 <div className="row" style={{marginTop:6}}>
                   <button className="btn ghost" type="button" onClick={()=>finalizeItem(mm.id)}>Finalize & Share</button>
                 </div>
