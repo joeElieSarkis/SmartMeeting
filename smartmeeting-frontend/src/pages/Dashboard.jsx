@@ -1,23 +1,90 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
+import { getUser } from "../auth";
 
 export default function Dashboard() {
   const [meetings, setMeetings] = useState([]);
+  const [rooms, setRooms] = useState([]);
   const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(true);
   const nav = useNavigate();
+  const user = getUser();
 
   useEffect(() => {
-    api.meetings.all().then(setMeetings).catch(() => setErr("Failed to load meetings"));
+    async function load() {
+      setErr(""); setLoading(true);
+      try {
+        const [ms, rs] = await Promise.all([
+          api.meetings.all(),
+          api.rooms.all(),
+        ]);
+        // sort by startTime ascending
+        ms.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+        setMeetings(ms);
+        setRooms(rs);
+      } catch {
+        setErr("Failed to load data");
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
   }, []);
 
-  // pick the next upcoming meeting (for the "Join Now" quick action)
+  // Quick: next meeting that hasn't ended yet
   const nextMeeting = useMemo(() => {
     const now = new Date();
-    return [...meetings]
-      .filter(m => new Date(m.endTime) > now)
-      .sort((a,b) => new Date(a.startTime) - new Date(b.startTime))[0];
+    return meetings.find(m => new Date(m.endTime) > now) || null;
   }, [meetings]);
+
+  // Meetings for today
+  const todayMeetings = useMemo(() => {
+    const start = startOfDay(new Date());
+    const end = endOfDay(new Date());
+    return meetings.filter(m => {
+      const s = new Date(m.startTime);
+      return s >= start && s <= end;
+    });
+  }, [meetings]);
+
+  // Notifications (very simple + fast):
+  // - Count of today’s meetings
+  // - Next meeting time if any
+  const notifications = useMemo(() => {
+    const notes = [];
+    if (todayMeetings.length) {
+      notes.push(`You have ${todayMeetings.length} meeting${todayMeetings.length>1?"s":""} today.`);
+    } else {
+      notes.push("No meetings today.");
+    }
+    if (nextMeeting) {
+      notes.push(`Next: “${nextMeeting.title}” at ${new Date(nextMeeting.startTime).toLocaleTimeString()}`);
+    }
+    return notes;
+  }, [todayMeetings, nextMeeting]);
+
+  // Build a simple room availability map for today
+  const roomBlocks = useMemo(() => {
+    const start = startOfDay(new Date());
+    const end = endOfDay(new Date());
+    const map = new Map(); // roomId -> [{start,end,title}]
+    rooms.forEach(r => map.set(r.id, []));
+    meetings.forEach(m => {
+      const ms = new Date(m.startTime);
+      const me = new Date(m.endTime);
+      if (ms <= end && me >= start) {
+        const list = map.get(m.roomId) || [];
+        list.push({ start: ms, end: me, title: m.title, id: m.id });
+        map.set(m.roomId, list);
+      }
+    });
+    // sort each room’s blocks by start time
+    for (const [k, arr] of map) {
+      arr.sort((a,b)=>a.start-b.start);
+    }
+    return map;
+  }, [rooms, meetings]);
 
   function goJoin() {
     if (!nextMeeting) return;
@@ -28,50 +95,124 @@ export default function Dashboard() {
     <div style={page}>
       <h1 style={title}>Dashboard</h1>
 
+      {err && <div style={{color:"crimson", marginBottom:12}}>{err}</div>}
+      {loading && <div className="card">Loading…</div>}
+
+      {/* Notifications */}
       <section style={card}>
-        <h2 style={h2}>Upcoming Meetings</h2>
-        {err && <div style={{color:"crimson"}}>{err}</div>}
-        <ul style={{margin:0, paddingLeft:18, listStyle:"none"}}>
-          {meetings.map(m => (
-            <li key={m.id} style={{marginBottom:8}}>
-              <Link to={`/meetings/active?id=${m.id}`} style={rowLink}>
-                <span>{timeRange(m.startTime, m.endTime)}</span>
-                <span>• {m.title}</span>
-                <span>• Room #{m.roomId}</span>
-              </Link>
-              <div style={{marginTop:4, display:"flex", gap:8}}>
-                <Link className="btn ghost" to={`/meetings/active?id=${m.id}`}>Open</Link>
-                <Link className="btn ghost" to={`/minutes?meetingId=${m.id}`}>Minutes</Link>
-              </div>
-            </li>
-          ))}
-          {meetings.length===0 && !err && <li>No meetings yet</li>}
+        <h2 style={h2}>Notifications</h2>
+        <ul style={{margin:0, paddingLeft:18}}>
+          {notifications.map((n,i)=><li key={i}>{n}</li>)}
         </ul>
       </section>
 
+      {/* Upcoming Meetings */}
+      <section style={card}>
+        <h2 style={h2}>Upcoming Meetings</h2>
+        <ul style={{margin:0, paddingLeft:0, listStyle:"none"}}>
+          {meetings
+            .filter(m => new Date(m.endTime) > new Date())
+            .slice(0, 6)
+            .map(m => (
+              <li key={m.id} style={{marginBottom:10, paddingBottom:10, borderBottom:"1px solid #eef2f7"}}>
+                <Link to={`/meetings/active?id=${m.id}`} style={rowLink}>
+                  <span>{timeRange(m.startTime, m.endTime)}</span>
+                  <span>• {m.title}</span>
+                  <span>• Room #{m.roomId}</span>
+                </Link>
+                <div style={{marginTop:6, display:"flex", gap:8, flexWrap:"wrap"}}>
+                  <Link className="btn ghost" to={`/meetings/active?id=${m.id}`}>Open</Link>
+                  <Link className="btn ghost" to={`/minutes?meetingId=${m.id}`}>Minutes</Link>
+                </div>
+              </li>
+            ))}
+          {meetings.filter(m => new Date(m.endTime) > new Date()).length === 0 && (
+            <li style={{color:"var(--muted)"}}>No upcoming meetings</li>
+          )}
+        </ul>
+      </section>
+
+      {/* Quick actions */}
       <div style={grid}>
         <button className="btn" onClick={()=>nav("/meetings/book")}>Schedule Meeting</button>
         <button className="btn" onClick={goJoin} disabled={!nextMeeting}>Join Now</button>
         <button className="btn" onClick={()=>nav("/minutes/review")}>View Minutes</button>
+        {user?.role === "Admin" && (
+          <button className="btn" onClick={()=>nav("/admin/rooms")}>Manage Rooms</button>
+        )}
       </div>
 
+      {/* Room availability (today) */}
       <section style={card}>
-        <h2 style={h2}>Room Availability</h2>
-        <div>Calendar placeholder</div>
+        <h2 style={h2}>Room Availability — {formatDate(new Date())}</h2>
+        {!rooms.length ? (
+          <div style={{color:"var(--muted)"}}>No rooms</div>
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th style={{width:180}}>Room</th>
+                <th>Booked Blocks</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rooms.map(r => {
+                const blocks = roomBlocks.get(r.id) || [];
+                return (
+                  <tr key={r.id}>
+                    <td>
+                      <div style={{fontWeight:600}}>{r.name}</div>
+                      <div style={{fontSize:12, color:"#64748b"}}>
+                        cap {r.capacity} • {r.location}
+                      </div>
+                    </td>
+                    <td>
+                      {!blocks.length ? (
+                        <span style={{color:"var(--success)", fontWeight:600}}>Available</span>
+                      ) : (
+                        <div style={{display:"flex", gap:8, flexWrap:"wrap"}}>
+                          {blocks.map(b => (
+                            <Link
+                              key={b.id}
+                              to={`/meetings/active?id=${b.id}`}
+                              className="badge"
+                              title={b.title}
+                            >
+                              {pad2(b.start.getHours())}:{pad2(b.start.getMinutes())}
+                              –
+                              {pad2(b.end.getHours())}:{pad2(b.end.getMinutes())}
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </section>
     </div>
   );
 }
 
+/* helpers */
 function timeRange(start, end){
   const s = new Date(start), e = new Date(end);
-  const pad = n => String(n).padStart(2,"0");
-  return `${pad(s.getHours())}:${pad(s.getMinutes())}–${pad(e.getHours())}:${pad(e.getMinutes())}`;
+  return `${pad2(s.getHours())}:${pad2(s.getMinutes())}–${pad2(e.getHours())}:${pad2(e.getMinutes())}`;
+}
+function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
+function endOfDay(d){ const x=new Date(d); x.setHours(23,59,59,999); return x; }
+function pad2(n){ return String(n).padStart(2,"0"); }
+function formatDate(d){
+  return d.toLocaleDateString(undefined, { weekday:"short", year:"numeric", month:"short", day:"numeric" });
 }
 
+/* styles */
 const page = { minHeight:"100vh", background:"#f8fafc", color:"#0f172a", padding:"20px", fontFamily:"system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif" };
-const title = { fontSize: 24, fontWeight: 700, marginBottom: 20 };
-const card = { background:"#fff", border:"1px solid #e5e7eb", borderRadius:12, padding:16, marginBottom:20, boxShadow:"0 2px 6px rgba(0,0,0,0.05)" };
-const h2 = { fontSize:16, fontWeight:600, marginTop:0, marginBottom:12 };
-const grid = { display:"grid", gap:12, gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))", marginBottom:20 };
+const title = { fontSize: 24, fontWeight: 700, marginBottom: 16 };
+const card = { background:"#fff", border:"1px solid #e5e7eb", borderRadius:12, padding:16, marginBottom:16, boxShadow:"0 2px 6px rgba(0,0,0,0.05)" };
+const h2 = { fontSize:16, fontWeight:700, marginTop:0, marginBottom:12 };
+const grid = { display:"grid", gap:12, gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))", marginBottom:16 };
 const rowLink = { textDecoration:"none", color:"#0f172a" };
