@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using System.IO;          
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using SmartMeeting.Application.DTOs;
 using SmartMeeting.Application.Services;
 
@@ -45,6 +47,42 @@ namespace SmartMeeting.API.Controllers
             var created = await _service.CreateAsync(dto);
             return CreatedAtAction(nameof(Get), new { id = created.Id }, created);
         }
+
+        // POST: api/attachments/upload
+        [HttpPost("upload")]
+        [RequestSizeLimit(50_000_000)] // ~50MB, will adjust if needed
+        public async Task<ActionResult<AttachmentDto>> Upload([FromForm] int meetingId, [FromForm] IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { message = "No file uploaded." });
+
+            // Ensure folder exists
+            var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
+            Directory.CreateDirectory(uploadsDir);
+
+            // Unique filename to avoid collisions
+            var safeName = Path.GetFileName(file.FileName);
+            var unique = $"{Guid.NewGuid():n}_{safeName}";
+            var savedPath = Path.Combine(uploadsDir, unique);
+
+            using (var stream = new FileStream(savedPath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            // Public URL (served by UseStaticFiles)
+            var publicPath = $"/uploads/{unique}";
+
+            var created = await _service.CreateAsync(new AttachmentCreateDto
+            {
+                MeetingId = meetingId,
+                FileName = safeName,
+                FilePath = publicPath
+            });
+
+            return CreatedAtAction(nameof(Get), new { id = created.Id }, created);
+        }
+
 
         // PUT: api/attachments/5
         [HttpPut("{id}")]

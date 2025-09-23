@@ -55,6 +55,8 @@ app.UseHttpsRedirection();
 // Enable CORS BEFORE MapControllers
 app.UseCors(AllowFrontend);
 
+app.UseStaticFiles();
+
 app.UseAuthorization();
 
 app.MapControllers();

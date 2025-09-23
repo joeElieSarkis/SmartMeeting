@@ -1,4 +1,12 @@
 const API = "http://localhost:5114"; // backend base URL
+export const API_BASE = API;
+
+// Helper to turn "/uploads/xyz.png" into "http://localhost:5114/uploads/xyz.png"
+function fileUrl(path) {
+  if (!path) return "";
+  return path.startsWith("http") ? path : `${API}${path.startsWith("/") ? path : "/" + path}`;
+}
+export { fileUrl };
 
 async function jfetch(path, options = {}) {
   const res = await fetch(`${API}${path}`, {
@@ -87,12 +95,28 @@ export const api = {
   // ===== Meeting Minutes =====
   minutes: {
     byMeeting: (meetingId) =>
-      jfetch(`/api/meetingminutes/byMeeting/${meetingId}`), // matches your controller
+      jfetch(`/api/meetingminutes/byMeeting/${meetingId}`),
     create: (payload) =>
       jfetch("/api/meetingminutes", {
         method: "POST",
         body: JSON.stringify(payload),
       }),
   },
-};
 
+  // ===== Attachments =====
+  attachments: {
+    byMeeting: (meetingId) => jfetch(`/api/attachments/byMeeting/${meetingId}`),
+    upload: async (meetingId, file) => {
+      const form = new FormData();
+      form.append("meetingId", meetingId);
+      form.append("file", file);
+      const res = await fetch(`${API}/api/attachments/upload`, {
+        method: "POST",
+        body: form, // don't set Content-Type manually
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    delete: (id) => jfetch(`/api/attachments/${id}`, { method: "DELETE" }),
+  },
+};
