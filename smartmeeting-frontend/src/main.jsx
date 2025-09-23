@@ -4,12 +4,13 @@ import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import Login from './App.jsx'
 import AppLayout from './layouts/AppLayout.jsx'
 import Dashboard from './pages/Dashboard.jsx'
-import CalendarView from './pages/CalendarView.jsx'   // 👈 NEW
+import CalendarView from './pages/CalendarView.jsx'
 import MeetingBooking from './pages/MeetingBooking.jsx'
 import ActiveMeeting from './pages/ActiveMeeting.jsx'
 import MinutesEditor from './pages/MinutesEditor.jsx'
 import MinutesReview from './pages/MinutesReview.jsx'
 import AdminRooms from './pages/AdminRooms.jsx'
+import Profile from './pages/Profile.jsx' // 👈 NEW
 import './index.css'
 import { getUser } from './auth.js'
 
@@ -32,11 +33,12 @@ const router = createBrowserRouter([
     element: <RequireAuth><AppLayout /></RequireAuth>,
     children: [
       { path: '/dashboard', element: <Dashboard /> },
-      { path: '/calendar', element: <CalendarView /> },                 // 👈 NEW
+      { path: '/calendar', element: <CalendarView /> },
       { path: '/meetings/book', element: <MeetingBooking /> },
       { path: '/meetings/active', element: <ActiveMeeting /> },
       { path: '/minutes', element: <MinutesEditor /> },
       { path: '/minutes/review', element: <MinutesReview /> },
+      { path: '/profile', element: <Profile /> }, // 👈 NEW
 
       // Admin-only route
       { path: '/admin/rooms', element: <RequireRole role="Admin"><AdminRooms /></RequireRole> },

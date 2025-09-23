@@ -60,6 +60,12 @@ export const api = {
   // ===== Users =====
   users: {
     all: () => jfetch("/api/users"),
+    byId: (id) => jfetch(`/api/users/${id}`), // 👈 NEW
+    update: (id, payload) =>                 // 👈 NEW
+      jfetch(`/api/users/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      }),
   },
 
   // ===== Rooms =====
