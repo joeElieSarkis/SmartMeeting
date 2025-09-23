@@ -4,6 +4,7 @@ import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import Login from './App.jsx'
 import AppLayout from './layouts/AppLayout.jsx'
 import Dashboard from './pages/Dashboard.jsx'
+import CalendarView from './pages/CalendarView.jsx'   // 👈 NEW
 import MeetingBooking from './pages/MeetingBooking.jsx'
 import ActiveMeeting from './pages/ActiveMeeting.jsx'
 import MinutesEditor from './pages/MinutesEditor.jsx'
@@ -17,7 +18,7 @@ function RequireAuth({ children }) {
   return user ? children : <Navigate to="/" replace />;
 }
 
-// NEW: role gate
+// Role gate helper
 function RequireRole({ role, children }) {
   const user = getUser();
   if (!user) return <Navigate to="/" replace />;
@@ -31,12 +32,13 @@ const router = createBrowserRouter([
     element: <RequireAuth><AppLayout /></RequireAuth>,
     children: [
       { path: '/dashboard', element: <Dashboard /> },
+      { path: '/calendar', element: <CalendarView /> },                 // 👈 NEW
       { path: '/meetings/book', element: <MeetingBooking /> },
       { path: '/meetings/active', element: <ActiveMeeting /> },
       { path: '/minutes', element: <MinutesEditor /> },
       { path: '/minutes/review', element: <MinutesReview /> },
 
-      // 🔒 Admin-only route
+      // Admin-only route
       { path: '/admin/rooms', element: <RequireRole role="Admin"><AdminRooms /></RequireRole> },
     ]
   }

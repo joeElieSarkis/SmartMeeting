@@ -14,6 +14,7 @@ export default function AppLayout(){
         </div>
         <nav style={nav}>
           <Link to="/dashboard">Dashboard</Link>
+          <Link to="/calendar">Calendar</Link> 
           <Link to="/meetings/book">Book</Link>
           <Link to="/minutes">Minutes</Link>
           {isAdmin && <Link to="/admin/rooms">Rooms</Link>}
