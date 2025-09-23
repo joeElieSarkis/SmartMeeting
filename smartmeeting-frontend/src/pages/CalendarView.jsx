@@ -117,6 +117,7 @@ export default function CalendarView() {
         <span className="badge">Scheduled</span>
         <span className="badge" style={{background:"#dcfce7", color:"#166534"}}>InProgress</span>
         <span className="badge" style={{background:"#fee2e2", color:"#991b1b"}}>Completed</span>
+        <span className="badge" style={{background:"#f1f5f9", color:"#64748b", textDecoration:"line-through"}}>Cancelled</span>
       </div>
 
       {/* Calendar grids */}
@@ -229,5 +230,6 @@ function hhmm(dt){ const t=new Date(dt); return `${String(t.getHours()).padStart
 function badgeForStatus(status){
   if (status === "InProgress") return { background:"#dcfce7", color:"#166534" };
   if (status === "Completed")  return { background:"#fee2e2", color:"#991b1b" };
-  return {}; // default .badge styles
+  if (status === "Cancelled")  return { background:"#f1f5f9", color:"#64748b", textDecoration:"line-through" };
+  return {}; // default .badge styles for "Scheduled"
 }

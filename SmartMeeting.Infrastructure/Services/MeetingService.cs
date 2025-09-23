@@ -25,8 +25,10 @@ namespace SmartMeeting.Infrastructure.Services
         private Task<bool> HasOverlapAsync(int roomId, DateTime start, DateTime end, int? excludeMeetingId = null)
         {
             // Overlap rule: (A.start < B.end) && (B.start < A.end)
+            // 👇 Ignore meetings that were soft-cancelled
             var query = _context.Meetings.AsNoTracking().Where(m =>
                 m.RoomId == roomId &&
+                m.Status != "Cancelled" &&        // <— key change
                 m.StartTime < end &&
                 start < m.EndTime
             );

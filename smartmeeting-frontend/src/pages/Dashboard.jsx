@@ -35,21 +35,27 @@ export default function Dashboard() {
 
   useEffect(() => { load(); }, []);
 
+  // Ignore cancelled meetings in the dashboard views
+  const activeMeetings = useMemo(
+    () => meetings.filter(m => m.status !== "Cancelled"),
+    [meetings]
+  );
+
   // Quick: next meeting that hasn't ended yet
   const nextMeeting = useMemo(() => {
     const now = new Date();
-    return meetings.find(m => new Date(m.endTime) > now) || null;
-  }, [meetings]);
+    return activeMeetings.find(m => new Date(m.endTime) > now) || null;
+  }, [activeMeetings]);
 
   // Meetings for today
   const todayMeetings = useMemo(() => {
     const start = startOfDay(new Date());
     const end = endOfDay(new Date());
-    return meetings.filter(m => {
+    return activeMeetings.filter(m => {
       const s = new Date(m.startTime);
       return s >= start && s <= end;
     });
-  }, [meetings]);
+  }, [activeMeetings]);
 
   // Notifications
   const notifications = useMemo(() => {
@@ -65,13 +71,13 @@ export default function Dashboard() {
     return notes;
   }, [todayMeetings, nextMeeting]);
 
-  // Room availability (today)
+  // Room availability (today) — exclude cancelled
   const roomBlocks = useMemo(() => {
     const start = startOfDay(new Date());
     const end = endOfDay(new Date());
     const map = new Map();
     rooms.forEach(r => map.set(r.id, []));
-    meetings.forEach(m => {
+    activeMeetings.forEach(m => {
       const ms = new Date(m.startTime);
       const me = new Date(m.endTime);
       if (ms <= end && me >= start) {
@@ -80,9 +86,9 @@ export default function Dashboard() {
         map.set(m.roomId, list);
       }
     });
-    for (const [k, arr] of map) arr.sort((a,b)=>a.start-b.start);
+    for (const [, arr] of map) arr.sort((a,b)=>a.start-b.start);
     return map;
-  }, [rooms, meetings]);
+  }, [rooms, activeMeetings]);
 
   function goJoin() {
     if (!nextMeeting) return;
@@ -129,18 +135,28 @@ export default function Dashboard() {
       setEditOpen(false);
       await load();
     } catch (e) {
-      // show backend message (overlap/validation)
       setEditErr(e?.message || "Update failed");
     } finally {
       setEditBusy(false);
     }
   }
 
-  // ----- Cancel meeting -----
+  // ----- Cancel meeting (soft cancel: set Status = "Cancelled") -----
   async function cancelMeeting(id) {
-    if (!confirm("Cancel (delete) this meeting?")) return;
+    if (!confirm("Cancel this meeting? This will mark it as Cancelled.")) return;
     try {
-      await api.meetings.delete(id);
+      const m = meetings.find(x => x.id === id);
+      if (!m) throw new Error("Meeting not found");
+      await api.meetings.update(id, {
+        id: m.id,
+        title: m.title,
+        agenda: m.agenda,
+        organizerId: m.organizerId,
+        roomId: m.roomId,
+        startTime: m.startTime,
+        endTime: m.endTime,
+        status: "Cancelled"
+      });
       await load();
     } catch (e) {
       alert(e?.message || "Failed to cancel meeting");
@@ -166,7 +182,7 @@ export default function Dashboard() {
       <section style={card}>
         <h2 style={h2}>Upcoming Meetings</h2>
         <ul style={{margin:0, paddingLeft:0, listStyle:"none"}}>
-          {meetings
+          {activeMeetings
             .filter(m => new Date(m.endTime) > new Date())
             .slice(0, 6)
             .map(m => (
@@ -184,7 +200,7 @@ export default function Dashboard() {
                 </div>
               </li>
             ))}
-          {meetings.filter(m => new Date(m.endTime) > new Date()).length === 0 && (
+          {activeMeetings.filter(m => new Date(m.endTime) > new Date()).length === 0 && (
             <li style={{color:"var(--muted)"}}>No upcoming meetings</li>
           )}
         </ul>
