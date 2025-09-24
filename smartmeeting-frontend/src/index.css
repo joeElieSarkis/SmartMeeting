@@ -254,3 +254,38 @@ details.accordion .accordion-body { padding: 12px 14px; }
 
 /* Just in case: no default underline in header/nav */
 header a, .nav a, a.navlink { color: inherit; }
+
+/* ---- Booking (vertical, same vibe as Minutes) ---- */
+.booking-vertical {
+  display: grid;
+  gap: 16px;
+}
+
+/* Date / Start / End — roomy and never clipped */
+.time-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;              /* if narrow, they wrap cleanly */
+}
+.time-row > .input {
+  flex: 1 1 220px;              /* each field gets space */
+  min-width: 180px;             /* ensures AM/PM is visible */
+}
+.time-input {
+  min-width: 180px;             /* extra safety for AM/PM in some UIs */
+}
+
+/* Textarea comfy but contained */
+.booking-vertical textarea.input {
+  min-height: 140px;
+  resize: vertical;             /* user can expand without affecting other cards */
+  max-height: 60vh;
+}
+
+/* Keep focus ring inside the field so cards never clip it */
+.booking-vertical .input:focus,
+.booking-vertical select:focus,
+.booking-vertical textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--ring) inset; /* inset = not clipped by card */
+}
