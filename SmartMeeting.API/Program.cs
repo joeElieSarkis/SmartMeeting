@@ -15,6 +15,7 @@ builder.Services.AddControllers();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IMeetingService, MeetingService>();
 builder.Services.AddScoped<IRoomService, RoomService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IParticipantService, ParticipantService>();
 builder.Services.AddScoped<IMeetingMinutesService, MeetingMinutesService>();
 builder.Services.AddScoped<IAttachmentService, AttachmentService>();
