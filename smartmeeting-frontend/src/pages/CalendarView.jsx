@@ -110,14 +110,14 @@ export default function CalendarView() {
             </select>
           </div>
         </div>
-      </div>
+      </div> 
 
       {/* Legend */}
       <div className="row" style={{gap:10, flexWrap:"wrap"}}>
-        <span className="badge">Scheduled</span>
-        <span className="badge" style={{background:"#dcfce7", color:"#166534"}}>InProgress</span>
-        <span className="badge" style={{background:"#fee2e2", color:"#991b1b"}}>Completed</span>
-        <span className="badge" style={{background:"#f1f5f9", color:"#64748b", textDecoration:"line-through"}}>Cancelled</span>
+        <span className="badge badge--scheduled">Scheduled</span>
+        <span className="badge badge--inprogress">InProgress</span>
+        <span className="badge badge--completed">Completed</span>
+        <span className="badge badge--canceled">Canceled</span>
       </div>
 
       {/* Calendar grids */}
@@ -150,9 +150,7 @@ function CalendarGrid({ days, mapByDay, dimOtherMonth = false, month }) {
       gridTemplateColumns:"repeat(7, 1fr)",
       gap:8
     }}>
-      {/* Header row when rendering the first week of a block */}
       <DayHeader />
-      {/* Days */}
       {days.map((d, idx) => {
         const key = ymd(d);
         const items = mapByDay.get(key) || [];
@@ -163,7 +161,7 @@ function CalendarGrid({ days, mapByDay, dimOtherMonth = false, month }) {
             borderRadius:10,
             padding:8,
             minHeight:110,
-            background:"#fff",
+            background:"#fff0",
             opacity: muted ? 0.6 : 1
           }}>
             <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6}}>
@@ -175,9 +173,8 @@ function CalendarGrid({ days, mapByDay, dimOtherMonth = false, month }) {
                 <Link
                   key={m.id}
                   to={`/meetings/active?id=${m.id}`}
-                  className="badge"
+                  className={`badge ${classForStatus(m.status)}`}
                   title={m.title}
-                  style={badgeForStatus(m.status)}
                 >
                   {hhmm(m.startTime)}–{hhmm(m.endTime)} • {m.title}
                 </Link>
@@ -214,10 +211,7 @@ function weekStart(d){ const x=new Date(d); const dow=x.getDay(); x.setDate(x.ge
 function weekEnd(d){ const x=weekStart(d); x.setDate(x.getDate()+6); x.setHours(23,59,59,999); return x; }
 function monthStartGrid(d){ const s=startOfMonth(d); return weekStart(s); }
 function monthEndGrid(d){ const e=endOfMonth(d); return weekEnd(e); }
-function weekMatrix(d){
-  const start = weekStart(d);
-  return [Array.from({length:7}, (_,i)=> addDays(start, i))];
-}
+function weekMatrix(d){ const start = weekStart(d); return [Array.from({length:7}, (_,i)=> addDays(start, i))]; }
 function monthMatrix(d){
   const start = monthStartGrid(d);
   const end = monthEndGrid(d);
@@ -227,9 +221,11 @@ function monthMatrix(d){
 }
 function fmtDate(d){ return d.toLocaleDateString(undefined, { month:"short", day:"numeric" }); }
 function hhmm(dt){ const t=new Date(dt); return `${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`; }
-function badgeForStatus(status){
-  if (status === "InProgress") return { background:"#dcfce7", color:"#166534" };
-  if (status === "Completed")  return { background:"#fee2e2", color:"#991b1b" };
-  if (status === "Cancelled")  return { background:"#f1f5f9", color:"#64748b", textDecoration:"line-through" };
-  return {}; // default .badge styles for "Scheduled"
+function classForStatus(status){
+  if (!status) return "badge--scheduled";
+  const s = String(status).toLowerCase();
+  if (s === "inprogress") return "badge--inprogress";
+  if (s === "completed")  return "badge--completed";
+  if (s === "canceled" || s === "cancelled") return "badge--canceled";
+  return "badge--scheduled";
 }

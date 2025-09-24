@@ -11,6 +11,7 @@ import MinutesEditor from './pages/MinutesEditor.jsx'
 import MinutesReview from './pages/MinutesReview.jsx'
 import AdminRooms from './pages/AdminRooms.jsx'
 import Profile from './pages/Profile.jsx'
+import ForgotPassword from './pages/ForgotPassword.jsx'
 import './index.css'
 import { getUser } from './auth.js'
 
@@ -18,15 +19,11 @@ function RequireAuth({ children }) {
   const user = getUser();
   return user ? children : <Navigate to="/" replace />;
 }
-
-// Role gate helper (exact match)
 function RequireRole({ role, children }) {
   const user = getUser();
   if (!user) return <Navigate to="/" replace />;
   return user.role === role ? children : <Navigate to="/dashboard" replace />;
 }
-
-// Disallow a specific role (e.g., Guest)
 function RequireNotRole({ role, children }) {
   const user = getUser();
   if (!user) return <Navigate to="/" replace />;
@@ -35,6 +32,7 @@ function RequireNotRole({ role, children }) {
 
 const router = createBrowserRouter([
   { path: '/', element: <Login /> },
+  { path: '/forgot', element: <ForgotPassword /> },
   {
     path: '/',
     element: <RequireAuth><AppLayout /></RequireAuth>,
@@ -46,8 +44,6 @@ const router = createBrowserRouter([
       { path: '/minutes', element: <MinutesEditor /> },
       { path: '/minutes/review', element: <MinutesReview /> },
       { path: '/profile', element: <Profile /> },
-
-      // Admin-only route
       { path: '/admin/rooms', element: <RequireRole role="Admin"><AdminRooms /></RequireRole> },
     ]
   }
