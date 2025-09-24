@@ -36,21 +36,40 @@ export default function MeetingBooking(){
     );
   }
 
+  // ---- live validation ----
+  const missing = useMemo(() => {
+    const m = [];
+    if (!form.title.trim()) m.push("title");
+    if (!form.agenda.trim()) m.push("agenda");
+    if (!form.date) m.push("date");
+    if (!form.start) m.push("start time");
+    if (!form.end) m.push("end time");
+    if (!form.roomId) m.push("room");
+    if (selectedUserIds.length === 0) m.push("at least 1 attendee");
+    return m;
+  }, [form, selectedUserIds]);
+
+  const canSubmit = missing.length === 0 && !busy;
+
   const submit = async () => {
+    // guard again on submit
+    if (missing.length) {
+      setErr(`Please complete: ${missing.join(", ")}.`);
+      return;
+    }
+
     try {
       setErr(""); setOk(""); setBusy(true);
       const meNow = getUser();
       if(!meNow) { setErr("Not logged in"); return; }
       if(isGuest){ setErr("Guests cannot book meetings."); return; }
-      if(!form.roomId) { setErr("Please select a room"); return; }
-      if(!form.date || !form.start || !form.end) { setErr("Please select date & time"); return; }
 
       const startTime = `${form.date}T${form.start}:00`;
       const endTime   = `${form.date}T${form.end}:00`;
 
       const created = await api.meetings.create({
-        title: form.title,
-        agenda: form.agenda,
+        title: form.title.trim(),
+        agenda: form.agenda.trim(),
         organizerId: meNow.id,
         roomId: Number(form.roomId),
         startTime,
@@ -59,11 +78,9 @@ export default function MeetingBooking(){
       });
 
       const uniqueIds = Array.from(new Set(selectedUserIds));
-      if (uniqueIds.length) {
-        await Promise.all(uniqueIds.map(uid =>
-          api.participants.create({ meetingId: created.id, userId: uid })
-        ));
-      }
+      await Promise.all(uniqueIds.map(uid =>
+        api.participants.create({ meetingId: created.id, userId: uid })
+      ));
 
       setOk("Meeting booked!");
       setForm({ title:"", agenda:"", date:"", start:"", end:"", roomId:"" });
@@ -177,8 +194,21 @@ export default function MeetingBooking(){
               ))}
             </select>
 
+            {/* live hint about what's missing */}
+            {missing.length > 0 && (
+              <div className="muted" style={{fontSize:12}}>
+                To book, please complete: {missing.join(", ")}.
+              </div>
+            )}
+
             <div className="row">
-              <button className="btn" type="button" onClick={submit} disabled={busy}>
+              <button
+                className="btn"
+                type="button"
+                onClick={submit}
+                disabled={!canSubmit}
+                title={!canSubmit ? `Complete: ${missing.join(", ")}` : ""}
+              >
                 {busy ? "Booking…" : "Book Now"}
               </button>
               <button
@@ -187,6 +217,7 @@ export default function MeetingBooking(){
                 onClick={()=>{
                   setForm({ title:"", agenda:"", date:"", start:"", end:"", roomId:"" });
                   setSelectedUserIds([]);
+                  setErr(""); setOk("");
                 }}
               >
                 Cancel
@@ -251,3 +282,4 @@ export default function MeetingBooking(){
     </div>
   );
 }
+

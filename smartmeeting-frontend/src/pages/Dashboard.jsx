@@ -37,7 +37,6 @@ export default function Dashboard() {
       setLoading(false);
     }
   }
-
   useEffect(() => { load(); }, []);
 
   const nextMeeting = useMemo(() => {
@@ -48,24 +47,13 @@ export default function Dashboard() {
   const todayMeetings = useMemo(() => {
     const start = startOfDay(new Date());
     const end = endOfDay(new Date());
-    return meetings.filter(m => {
-      const s = new Date(m.startTime);
-      return s >= start && s <= end;
-    });
+    return meetings
+      .filter(m => {
+        const s = new Date(m.startTime);
+        return s >= start && s <= end;
+      })
+      .sort((a,b)=> new Date(a.startTime) - new Date(b.startTime));
   }, [meetings]);
-
-  const notifications = useMemo(() => {
-    const notes = [];
-    if (todayMeetings.length) {
-      notes.push(`You have ${todayMeetings.length} meeting${todayMeetings.length>1?"s":""} today.`);
-    } else {
-      notes.push("No meetings today.");
-    }
-    if (nextMeeting) {
-      notes.push(`Next: “${nextMeeting.title}” at ${new Date(nextMeeting.startTime).toLocaleTimeString()}`);
-    }
-    return notes;
-  }, [todayMeetings, nextMeeting]);
 
   const roomBlocks = useMemo(() => {
     const start = startOfDay(new Date());
@@ -306,12 +294,49 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Notifications */}
+      {/* Notifications (now actionable list) */}
       <section className="card">
         <h2 className="section-title">Notifications</h2>
-        <ul style={{margin:0, paddingLeft:18}}>
-          {notifications.map((n,i)=><li key={i}>{n}</li>)}
-        </ul>
+
+        {/* Next meeting quick actions */}
+        {nextMeeting ? (
+          <div style={{marginBottom:8}}>
+            Next: “{nextMeeting.title}” at {new Date(nextMeeting.startTime).toLocaleTimeString()}
+            <div className="row" style={{marginTop:6}}>
+              <button className="btn" onClick={goJoin}>Join Now</button>
+              <button className="btn ghost" onClick={()=>openEdit(nextMeeting)}>Reschedule</button>
+            </div>
+          </div>
+        ) : (
+          <div className="muted">No upcoming meeting.</div>
+        )}
+
+        {/* Today’s meetings */}
+        <div style={{marginTop:12}}>
+          <div style={{fontWeight:700, marginBottom:6}}>
+            {todayMeetings.length
+              ? `You have ${todayMeetings.length} meeting${todayMeetings.length>1?"s":""} today:`
+              : "No meetings today."}
+          </div>
+
+          {todayMeetings.length > 0 && (
+            <ul style={{margin:0, paddingLeft:0, listStyle:"none"}}>
+              {todayMeetings.map(m => (
+                <li key={m.id} style={{padding:"8px 0", borderBottom:"1px solid var(--border)"}}>
+                  <div>
+                    <strong>{timeRange(m.startTime, m.endTime)}</strong> • {m.title} • Room #{m.roomId}
+                  </div>
+                  <div className="row" style={{marginTop:6, flexWrap:"wrap"}}>
+                    <Link className="btn ghost" to={`/meetings/active?id=${m.id}`}>Open</Link>
+                    <Link className="btn ghost" to={`/minutes?meetingId=${m.id}`}>Minutes</Link>
+                    <button className="btn ghost" onClick={()=>openEdit(m)}>Reschedule</button>
+                    <button className="btn ghost" onClick={()=>cancelMeeting(m.id)}>Cancel</button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </section>
 
       {/* Upcoming Meetings */}

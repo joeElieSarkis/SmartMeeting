@@ -1,18 +1,29 @@
+// src/pages/MinutesReview.jsx
 import { useEffect, useMemo, useState } from "react";
-import { api } from "../api";
+import { api, fileUrl } from "../api";
 import { getUser } from "../auth";
 
 export default function MinutesReview(){
   const [meetings, setMeetings] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
+
   const [minutes, setMinutes] = useState([]);
+  const [attachments, setAttachments] = useState([]);
+  const [users, setUsers] = useState([]);
+
   const [q, setQ] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [err, setErr] = useState("");
+  const [toast, setToast] = useState("");
 
   const me = getUser();
   const isGuest = me?.role === "Guest";
+
+  // --- data loads ---
+  useEffect(() => {
+    api.users.all().then(setUsers).catch(()=>{});
+  }, []);
 
   useEffect(()=>{
     api.meetings.all()
@@ -33,11 +44,22 @@ export default function MinutesReview(){
     }
   }
 
+  async function reloadAttachments(meetingId){
+    try{
+      const list = await api.attachments.byMeeting(meetingId);
+      setAttachments(list);
+    }catch{
+      setAttachments([]);
+    }
+  }
+
   useEffect(()=>{
     if(!selectedId) return;
     reloadMinutes(selectedId);
+    reloadAttachments(selectedId);
   },[selectedId]);
 
+  // --- filtering meetings list ---
   const filtered = useMemo(()=>{
     let list = [...meetings];
     if (from) {
@@ -58,6 +80,50 @@ export default function MinutesReview(){
     return list;
   }, [meetings, q, from, to]);
 
+  // --- helpers: users, attachments, export, share ---
+  const nameOf = (id) => users.find(u => u.id === id)?.name || `#${id}`;
+
+  function attachmentHref(a){
+    return fileUrl(a.filePath || a.url || a.path || a.location || "");
+  }
+  function attachmentName(a){
+    return a.fileName || a.name || (a.path || a.filePath || a.url || "").split("/").pop() || `file-${a.id}`;
+  }
+
+  function buildShareText(ms){
+    return ms.map(m =>
+      `• ${new Date(m.createdAt).toLocaleString()} — ${m.summary}` +
+      (m.taskDescription
+        ? ` [Task: ${m.taskDescription} • ${m.taskStatus}${m.taskDueDate ? " • due " + new Date(m.taskDueDate).toLocaleDateString() : ""}${m.assignedTo ? " • assigned to " + nameOf(m.assignedTo) : ""}]`
+        : ""
+      ) +
+      (m.isFinal ? " (FINAL)" : "")
+    ).join("\n");
+  }
+
+  function showToast(msg){
+    setToast(msg);
+    setTimeout(()=>setToast(""), 1800);
+  }
+
+  async function shareMinutes(){
+    if (!minutes.length) return;
+    const title = "Meeting Minutes";
+    const text = buildShareText(minutes);
+    const url = window.location.href;
+
+    try{
+      if (navigator.share) {
+        await navigator.share({ title, text, url });
+      } else {
+        await navigator.clipboard.writeText(text + "\n\n" + url);
+        showToast("Copied minutes to clipboard");
+      }
+    }catch{
+      /* user cancelled, ignore */
+    }
+  }
+
   function exportJSON(){
     const data = JSON.stringify(minutes, null, 2);
     downloadBlob(new Blob([data], {type:"application/json"}), `minutes-m${selectedId}.json`);
@@ -65,7 +131,7 @@ export default function MinutesReview(){
 
   function exportCSV(){
     const rows = [
-      ["Id","MeetingId","CreatedAt","Summary","TaskDescription","TaskStatus","TaskDueDate","AssignedTo","IsFinal"],
+      ["Id","MeetingId","CreatedAt","Summary","TaskDescription","TaskStatus","TaskDueDate","AssignedTo"],
       ...minutes.map(m => [
         safe(m.id),
         safe(m.meetingId),
@@ -74,21 +140,11 @@ export default function MinutesReview(){
         safe(m.taskDescription),
         safe(m.taskStatus),
         safe(m.taskDueDate),
-        safe(m.assignedTo),
-        m.isFinal ? "Yes" : "No"
+        nameOf(m.assignedTo) // export readable name
       ])
     ];
     const csv = rows.map(r => r.map(csvCell).join(",")).join("\n");
     downloadBlob(new Blob([csv], {type:"text/csv"}), `minutes-m${selectedId}.csv`);
-  }
-
-  function shareToClipboard(){
-    const text = minutes.map(m =>
-      `• ${new Date(m.createdAt).toLocaleString()} — ${m.summary}` +
-      (m.taskDescription ? ` [Task: ${m.taskDescription} • ${m.taskStatus}${m.taskDueDate ? " • due " + new Date(m.taskDueDate).toLocaleDateString() : ""}]` : "") +
-      (m.isFinal ? " (FINAL)" : "")
-    ).join("\n");
-    navigator.clipboard.writeText(text).catch(()=>{});
   }
 
   async function finalize(id){
@@ -96,6 +152,7 @@ export default function MinutesReview(){
     try{
       await api.minutes.finalize(id);
       await reloadMinutes(selectedId);
+      // attachments are by-meeting, so nothing extra to do
     }catch{
       setErr("Finalize failed");
     }
@@ -106,11 +163,12 @@ export default function MinutesReview(){
       <h1 className="page-title">Minutes Review</h1>
       {err && <div style={{color:"crimson"}}>{err}</div>}
       {isGuest && (
-        <div className="card" style={{background:"#fff8e1", borderColor:"#facc15"}}>
+        <div className="card" style={{background:"var(--surface)", borderColor:"var(--border)"}}>
           Guests can view minutes but cannot finalize them.
         </div>
       )}
 
+      {/* Filters */}
       <div className="card">
         <h2 className="section-title">Filters</h2>
         <div className="row" style={{gap:8, flexWrap:"wrap"}}>
@@ -121,6 +179,7 @@ export default function MinutesReview(){
       </div>
 
       <div className="grid" style={{gap:16, gridTemplateColumns:"300px 1fr"}}>
+        {/* Left: past meetings */}
         <div className="card" style={{maxHeight:500, overflow:"auto"}}>
           <h2 className="section-title">Past Meetings</h2>
           <ul style={{margin:0, paddingLeft:0, listStyle:"none"}}>
@@ -132,10 +191,10 @@ export default function MinutesReview(){
                     borderRadius:8,
                     cursor:"pointer",
                     marginBottom:6,
-                    background: m.id===selectedId ? "#eff6ff" : "transparent"
+                    background: m.id===selectedId ? "color-mix(in oklab, var(--primary) 12%, transparent)" : "transparent"
                   }}>
                 <div style={{fontWeight:600}}>{m.title}</div>
-                <div style={{fontSize:12, color:"#64748b"}}>
+                <div style={{fontSize:12, color:"var(--muted)"}}>
                   {new Date(m.startTime).toLocaleString()} • Room #{m.roomId}
                 </div>
               </li>
@@ -144,49 +203,81 @@ export default function MinutesReview(){
           </ul>
         </div>
 
-        <div className="card">
-          <div className="row" style={{justifyContent:"space-between", alignItems:"center"}}>
-            <h2 className="section-title" style={{marginBottom:0}}>Minutes</h2>
-            <div className="row" style={{gap:8}}>
-              <button className="btn ghost" type="button" onClick={exportCSV} disabled={!minutes.length}>Export CSV</button>
-              <button className="btn ghost" type="button" onClick={exportJSON} disabled={!minutes.length}>Export JSON</button>
-              <button className="btn" type="button" onClick={shareToClipboard} disabled={!minutes.length}>Share</button>
+        {/* Right: minutes + actions */}
+        <div className="grid" style={{gap:16}}>
+          <div className="card">
+            <div className="row" style={{justifyContent:"space-between", alignItems:"center"}}>
+              <h2 className="section-title" style={{marginBottom:0}}>Minutes</h2>
+              <div className="row" style={{gap:8}}>
+                <button className="btn ghost" type="button" onClick={exportCSV} disabled={!minutes.length}>Export CSV</button>
+                <button className="btn ghost" type="button" onClick={exportJSON} disabled={!minutes.length}>Export JSON</button>
+                <button className="btn" type="button" onClick={shareMinutes} disabled={!minutes.length}>Share</button>
+              </div>
             </div>
-          </div>
 
-          {!minutes.length ? (
-            <div style={{color:"#64748b"}}>No minutes for this meeting.</div>
-          ) : (
-            <ul style={{marginTop:12, paddingLeft:18}}>
-              {minutes.map(mm => (
-                <li key={mm.id} style={{marginBottom:8}}>
-                  <div className="row" style={{justifyContent:"space-between", alignItems:"center"}}>
-                    <div>
-                      <strong>{new Date(mm.createdAt).toLocaleString()}</strong>{" "}
-                      {mm.isFinal ? (
-                        <span className="badge" style={{background:"#dcfce7", color:"#166534"}}>FINAL</span>
-                      ) : (
-                        <span className="badge">Draft</span>
+            {!minutes.length ? (
+              <div className="muted">No minutes for this meeting.</div>
+            ) : (
+              <ul style={{marginTop:12, paddingLeft:18}}>
+                {minutes.map(mm => (
+                  <li key={mm.id} style={{marginBottom:8}}>
+                    <div className="row" style={{justifyContent:"space-between", alignItems:"center"}}>
+                      <div>
+                        <strong>{new Date(mm.createdAt).toLocaleString()}</strong>{" "}
+                        {mm.isFinal ? (
+                          <span className="badge badge--inprogress">FINAL</span>
+                        ) : (
+                          <span className="badge">Draft</span>
+                        )}
+                      </div>
+                      {!mm.isFinal && !isGuest && (
+                        <button className="btn ghost" onClick={()=>finalize(mm.id)}>Finalize</button>
                       )}
                     </div>
-                    {!mm.isFinal && !isGuest && (
-                      <button className="btn ghost" onClick={()=>finalize(mm.id)}>Finalize</button>
+
+                    {mm.summary && <div style={{marginTop:4}}>{mm.summary}</div>}
+
+                    {mm.taskDescription && (
+                      <div style={{fontSize:14, color:"var(--muted)", marginTop:4}}>
+                        Task: <strong style={{color:"var(--text)"}}>{mm.taskDescription}</strong>
+                        {" • "}
+                        <strong>{mm.taskStatus}</strong>
+                        {mm.taskDueDate && <> • due {new Date(mm.taskDueDate).toLocaleDateString()}</>}
+                        {mm.assignedTo && <> • assigned to <strong>{nameOf(mm.assignedTo)}</strong></>}
+                      </div>
                     )}
-                  </div>
-                  <div>{mm.summary}</div>
-                  {mm.taskDescription && (
-                    <div style={{fontSize:14, color:"#334155"}}>
-                      Task: {mm.taskDescription} • <strong>{mm.taskStatus}</strong>
-                      {mm.taskDueDate && <> • due {new Date(mm.taskDueDate).toLocaleDateString()}</>}
-                      {mm.assignedTo && <> • assigned to #{mm.assignedTo}</>}
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Attachments (by meeting) */}
+          <div className="card">
+            <h3 className="section-title" style={{marginTop:0}}>Attachments</h3>
+            {attachments.length === 0 ? (
+              <div className="muted">No attachments.</div>
+            ) : (
+              <ul style={{margin:0, paddingLeft:18}}>
+                {attachments.map(a => (
+                  <li key={a.id}>
+                    <a href={attachmentHref(a)} target="_blank" rel="noreferrer">
+                      {attachmentName(a)}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Tiny toast */}
+      {toast && (
+        <div className="card" style={{position:"fixed", bottom:16, right:16}}>
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
@@ -203,3 +294,4 @@ function downloadBlob(blob, filename){
   a.href = url; a.download = filename; a.click();
   setTimeout(()=>URL.revokeObjectURL(url), 500);
 }
+
