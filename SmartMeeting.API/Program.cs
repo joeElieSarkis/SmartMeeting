@@ -40,19 +40,23 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.MigrateAsync();                                      // apply pending migrations
-    await SmartMeeting.Infrastructure.Persistence.DbSeeder.SeedAsync(db);  // seed admin, sample rooms, etc.
+    await db.Database.MigrateAsync();
+    await DbSeeder.SeedAsync(db);
 }
 
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+    // In dev, keep HTTP only unless you’ve set up HTTPS:
+    // (comment the next line if you don’t have an HTTPS endpoint)
+    // app.UseHttpsRedirection();
+}
+else
+{
+    app.UseHttpsRedirection();
 }
 
-app.UseHttpsRedirection();
-
-// Enable CORS BEFORE MapControllers
 app.UseCors(AllowFrontend);
 
 app.UseStaticFiles();
@@ -62,5 +66,3 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
-
-

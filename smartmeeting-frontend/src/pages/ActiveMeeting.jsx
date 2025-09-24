@@ -5,6 +5,7 @@ import { useSearchParams } from "react-router-dom";
 export default function ActiveMeeting(){
   const [params] = useSearchParams();
   const meetingId = Number(params.get("id") || 0);
+
   const [m,setM] = useState(null);
   const [err,setErr] = useState("");
   const [seconds,setSeconds] = useState(0);
@@ -42,17 +43,45 @@ export default function ActiveMeeting(){
     return ()=>{ if(timerRef.current){ clearInterval(timerRef.current); timerRef.current=null; } }
   },[m?.status]);
 
-  function fmt(secs){ const h=Math.floor(secs/3600), m=Math.floor((secs%3600)/60), s=secs%60; const pad=n=>String(n).padStart(2,"0"); return `${pad(h)}:${pad(m)}:${pad(s)}`; }
+  function fmt(secs){
+    const h=Math.floor(secs/3600), m=Math.floor((secs%3600)/60), s=secs%60;
+    const pad=n=>String(n).padStart(2,"0");
+    return `${pad(h)}:${pad(m)}:${pad(s)}`;
+  }
+
+  const isCancelled = m?.status === "Cancelled";
+  const isInProgress = m?.status === "InProgress";
+  const isCompleted = m?.status === "Completed";
 
   async function start(){
-    if(!m) return;
-    await api.meetings.update(m.id, { id:m.id, title:m.title, agenda:m.agenda, organizerId:m.organizerId, roomId:m.roomId, startTime:m.startTime, endTime:m.endTime, status:"InProgress" });
-    setM({...m, status:"InProgress"}); setSeconds(0);
+    if (!m) return;
+    if (isCancelled || isCompleted) { setErr("Cancelled or completed meetings can’t be started."); return; }
+    try {
+      await api.meetings.update(m.id, {
+        id:m.id, title:m.title, agenda:m.agenda,
+        organizerId:m.organizerId, roomId:m.roomId,
+        startTime:m.startTime, endTime:m.endTime, status:"InProgress"
+      });
+      setM({...m, status:"InProgress"}); setSeconds(0); setErr("");
+    } catch (e) {
+      setErr(e?.message || "Failed to start meeting");
+    }
   }
+
   async function end(){
-    if(!m) return;
-    await api.meetings.update(m.id, { id:m.id, title:m.title, agenda:m.agenda, organizerId:m.organizerId, roomId:m.roomId, startTime:m.startTime, endTime:m.endTime, status:"Completed" });
-    setM({...m, status:"Completed"});
+    if (!m) return;
+    if (isCancelled) { setErr("Cancelled meetings can’t be ended."); return; }
+    if (!isInProgress) { setErr("Only in-progress meetings can be ended."); return; }
+    try {
+      await api.meetings.update(m.id, {
+        id:m.id, title:m.title, agenda:m.agenda,
+        organizerId:m.organizerId, roomId:m.roomId,
+        startTime:m.startTime, endTime:m.endTime, status:"Completed"
+      });
+      setM({...m, status:"Completed"}); setErr("");
+    } catch (e) {
+      setErr(e?.message || "Failed to end meeting");
+    }
   }
 
   return (
@@ -66,6 +95,12 @@ export default function ActiveMeeting(){
           <div style={{color:"#64748b"}}>
             Room #{m.roomId} • {new Date(m.startTime).toLocaleTimeString()} – {new Date(m.endTime).toLocaleTimeString()}
           </div>
+
+          {isCancelled && (
+            <div className="card" style={{background:"#fff8e1", borderColor:"#facc15", marginTop:12}}>
+              This meeting is <strong>Cancelled</strong>. Actions are disabled.
+            </div>
+          )}
 
           <div style={{marginTop:12}}>Status: <span className="badge">{m.status}</span></div>
           <div style={{marginTop:12}}>Timer: <code>{fmt(seconds)}</code></div>
@@ -83,11 +118,24 @@ export default function ActiveMeeting(){
           </div>
 
           <div className="row" style={{marginTop:12}}>
-            <button className="btn" onClick={start} disabled={m.status==="InProgress"}>Start</button>
-            <button className="btn ghost" onClick={end} disabled={m.status==="Completed"}>End</button>
+            <button
+              className="btn"
+              onClick={start}
+              disabled={isInProgress || isCompleted || isCancelled}
+            >
+              Start
+            </button>
+            <button
+              className="btn ghost"
+              onClick={end}
+              disabled={!isInProgress || isCancelled}
+            >
+              End
+            </button>
           </div>
         </div>
       )}
     </div>
   );
 }
+

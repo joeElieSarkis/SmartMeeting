@@ -13,13 +13,20 @@ export default function MinutesEditor(){
 
   const [meetings, setMeetings] = useState([]);
   const [meetingsErr, setMeetingsErr] = useState("");
-  const [list,setList] = useState([]);
-  const [attachments, setAttachments] = useState([]);
-  const [ok,setOk] = useState("");
-  const [err,setErr] = useState("");
-  const [busy,setBusy] = useState(false);
 
-  const [form,setForm] = useState({
+  const [list, setList] = useState([]);
+  const [attachments, setAttachments] = useState([]);
+
+  // NEW: attendees + users (for name lookup) + selected assignee
+  const [attendees, setAttendees] = useState([]);
+  const [users, setUsers] = useState([]); // cached for name lookup in list
+  const [assigneeId, setAssigneeId] = useState("");
+
+  const [ok, setOk] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const [form, setForm] = useState({
     summary:"", taskDescription:"", taskStatus:"Pending", taskDueDate:""
   });
 
@@ -40,13 +47,35 @@ export default function MinutesEditor(){
     try { setAttachments(await api.attachments.byMeeting(mid)); }
     catch {}
   }
+  async function loadAttendees(mid){
+    try {
+      const [parts, us] = await Promise.all([
+        api.participants.byMeeting(mid),
+        api.users.all()
+      ]);
+      setUsers(us);
+      const ids = new Set(parts.map(p => p.userId));
+      const mapped = us.filter(u => ids.has(u.id));
+      setAttendees(mapped);
+
+      // Default assignee: yourself if you're in the attendees; otherwise none
+      if (me && mapped.some(u => u.id === me.id)) {
+        setAssigneeId(String(me.id));
+      } else {
+        setAssigneeId("");
+      }
+    } catch {
+      // ignore silently; UI still works
+    }
+  }
 
   useEffect(()=>{
     if(meetingId){
       loadMinutes(meetingId);
       loadAttachments(meetingId);
+      loadAttendees(meetingId); // NEW
     } else {
-      setList([]); setAttachments([]);
+      setList([]); setAttachments([]); setAttendees([]); setAssigneeId("");
     }
   },[meetingId]);
 
@@ -65,13 +94,15 @@ export default function MinutesEditor(){
       await api.minutes.create({
         meetingId,
         summary: form.summary,
-        assignedTo: user?.id ?? null,
+        // NEW: assign to the chosen attendee (or null if Unassigned)
+        assignedTo: assigneeId ? Number(assigneeId) : null,
         taskDescription: form.taskDescription,
         taskStatus: form.taskStatus,
         taskDueDate: form.taskDueDate ? new Date(form.taskDueDate).toISOString() : null
       });
       setOk("Minutes saved");
       setForm({ summary:"", taskDescription:"", taskStatus:"Pending", taskDueDate:"" });
+      // keep the selected assignee
       await loadMinutes(meetingId);
     }catch(e){
       setErr(e?.message || "Failed to save minutes");
@@ -93,15 +124,26 @@ export default function MinutesEditor(){
   }
 
   function shareToClipboard(){
+    const nameOf = (uid) => {
+      const u = users.find(x => x.id === uid) || attendees.find(x => x.id === uid);
+      return u ? u.name : (uid ? `#${uid}` : "Unassigned");
+    };
     const text = list.map(m =>
       `• ${new Date(m.createdAt).toLocaleString()} — ${m.summary}` +
-      (m.taskDescription ? ` [Task: ${m.taskDescription} • ${m.taskStatus}${m.taskDueDate ? " • due " + new Date(m.taskDueDate).toLocaleDateString() : ""}]` : "") +
+      (m.taskDescription
+        ? ` [Task: ${m.taskDescription} • ${m.taskStatus}${m.taskDueDate ? " • due " + new Date(m.taskDueDate).toLocaleDateString() : ""} • assigned to ${nameOf(m.assignedTo)}]`
+        : ""
+      ) +
       (m.isFinal ? " (FINAL)" : "")
     ).join("\n");
     navigator.clipboard.writeText(text).then(()=>setOk("Copied to clipboard")).catch(()=>setErr("Copy failed"));
   }
 
   function printMinutes(){
+    const nameOf = (uid) => {
+      const u = users.find(x => x.id === uid) || attendees.find(x => x.id === uid);
+      return u ? u.name : (uid ? `#${uid}` : "Unassigned");
+    };
     const html = `
       <html>
       <head>
@@ -120,7 +162,7 @@ export default function MinutesEditor(){
           ${list.map(m => `
             <li>
               <div><strong>${new Date(m.createdAt).toLocaleString()}</strong> — ${escapeHtml(m.summary)} ${m.isFinal ? '<span class="final">[FINAL]</span>' : ''}</div>
-              ${m.taskDescription ? `<div>Task: ${escapeHtml(m.taskDescription)} • <strong>${m.taskStatus||""}</strong> ${m.taskDueDate ? `• due ${new Date(m.taskDueDate).toLocaleDateString()}` : ""}</div>` : ""}
+              ${m.taskDescription ? `<div>Task: ${escapeHtml(m.taskDescription)} • <strong>${m.taskStatus||""}</strong> ${m.taskDueDate ? `• due ${new Date(m.taskDueDate).toLocaleDateString()}` : ""} • assigned to ${escapeHtml(nameOf(m.assignedTo))}</div>` : ""}
             </li>
           `).join("")}
         </ul>
@@ -170,9 +212,15 @@ export default function MinutesEditor(){
     [meetings, meetingId]
   );
 
-  // 🚦 Disable “Save Draft” if latest minutes is final OR guest
+  // Disable “Save Draft” if latest minutes is final OR guest
   const latestIsFinal = list.length > 0 && !!list[list.length - 1].isFinal;
   const disableSave = latestIsFinal || isGuest;
+
+  // for rendering assignee name in list
+  const nameOf = (uid) => {
+    const u = users.find(x => x.id === uid) || attendees.find(x => x.id === uid);
+    return u ? u.name : (uid ? `#${uid}` : "Unassigned");
+  };
 
   return (
     <div className="grid" style={{gap:16}}>
@@ -209,12 +257,29 @@ export default function MinutesEditor(){
         <div className="grid" style={{gap:10}}>
           <textarea className="input" rows="3" placeholder="Summary" value={form.summary} onChange={e=>setForm({...form,summary:e.target.value})} disabled={isGuest}/>
           <textarea className="input" rows="3" placeholder="Action / Task" value={form.taskDescription} onChange={e=>setForm({...form,taskDescription:e.target.value})} disabled={isGuest}/>
+
           <div className="row">
             <select className="input" value={form.taskStatus} onChange={e=>setForm({...form,taskStatus:e.target.value})} disabled={isGuest}>
               <option>Pending</option><option>InProgress</option><option>Completed</option>
             </select>
             <input className="input" type="date" value={form.taskDueDate} onChange={e=>setForm({...form,taskDueDate:e.target.value})} disabled={isGuest}/>
           </div>
+
+          {/* NEW: Assignee selector (meeting attendees) */}
+          <div className="row">
+            <select
+              className="input"
+              value={assigneeId}
+              onChange={e=>setAssigneeId(e.target.value)}
+              disabled={isGuest}
+            >
+              <option value="">Unassigned</option>
+              {attendees.map(u => (
+                <option key={u.id} value={u.id}>{u.name} &lt;{u.email}&gt;</option>
+              ))}
+            </select>
+          </div>
+
           <div className="row">
             <button className="btn" type="button" onClick={save} disabled={busy || !meetingId || disableSave}>
               {busy ? "Saving…" : "Save Draft"}
@@ -259,7 +324,7 @@ export default function MinutesEditor(){
                 <div style={{fontSize:14, color:"#334155"}}>
                   Task: {mm.taskDescription} • <strong>{mm.taskStatus}</strong>
                   {mm.taskDueDate && <> • due {new Date(mm.taskDueDate).toLocaleDateString()}</>}
-                  {mm.assignedTo && <> • assigned to #{mm.assignedTo}</>}
+                  <> • assigned to {nameOf(mm.assignedTo)}</>
                 </div>
               )}
               {!mm.isFinal && !isGuest && (

@@ -143,10 +143,10 @@ export default function Dashboard() {
 
   // ----- Cancel meeting (soft cancel: set Status = "Cancelled") -----
   async function cancelMeeting(id) {
-    if (!confirm("Cancel this meeting? This will mark it as Cancelled.")) return;
+    const m = meetings.find(x => x.id === id);
+    if (!m) return;
+    if (!confirm("Mark this meeting as Cancelled?")) return;
     try {
-      const m = meetings.find(x => x.id === id);
-      if (!m) throw new Error("Meeting not found");
       await api.meetings.update(id, {
         id: m.id,
         title: m.title,

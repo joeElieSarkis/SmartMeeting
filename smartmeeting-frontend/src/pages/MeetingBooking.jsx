@@ -28,6 +28,8 @@ export default function MeetingBooking(){
     );
   }
 
+  function toIso(date, time){ return `${date}T${time}:00`; }
+
   const submit = async () => {
     try {
       setErr(""); setOk(""); setBusy(true);
@@ -37,8 +39,12 @@ export default function MeetingBooking(){
       if(!form.roomId) { setErr("Please select a room"); return; }
       if(!form.date || !form.start || !form.end) { setErr("Please select date & time"); return; }
 
-      const startTime = `${form.date}T${form.start}:00`;
-      const endTime   = `${form.date}T${form.end}:00`;
+      const startTime = toIso(form.date, form.start);
+      const endTime   = toIso(form.date, form.end);
+      if (new Date(endTime) <= new Date(startTime)) {
+        setErr("End time must be after start time.");
+        return;
+      }
 
       const created = await api.meetings.create({
         title: form.title,

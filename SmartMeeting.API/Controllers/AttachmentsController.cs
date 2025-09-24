@@ -1,4 +1,4 @@
-﻿using System.IO;          
+﻿using System.IO;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using SmartMeeting.Application.DTOs;
@@ -15,6 +15,13 @@ namespace SmartMeeting.API.Controllers
         public AttachmentsController(IAttachmentService service)
         {
             _service = service;
+        }
+
+        // --- Swagger-friendly upload form model ---
+        public class AttachmentUploadForm
+        {
+            public int MeetingId { get; set; }
+            public IFormFile File { get; set; } = default!;
         }
 
         // GET: api/attachments
@@ -49,25 +56,27 @@ namespace SmartMeeting.API.Controllers
         }
 
         // POST: api/attachments/upload
+        // ✅ FIX: wrap fields in a form model + specify Consumes
         [HttpPost("upload")]
-        [RequestSizeLimit(50_000_000)] // ~50MB, will adjust if needed
-        public async Task<ActionResult<AttachmentDto>> Upload([FromForm] int meetingId, [FromForm] IFormFile file)
+        [Consumes("multipart/form-data")]
+        [RequestSizeLimit(50_000_000)] // ~50MB
+        public async Task<ActionResult<AttachmentDto>> Upload([FromForm] AttachmentUploadForm form)
         {
-            if (file == null || file.Length == 0)
+            if (form.File == null || form.File.Length == 0)
                 return BadRequest(new { message = "No file uploaded." });
 
-            // Ensure folder exists
+            // Ensure folder exists under wwwroot so UseStaticFiles serves /uploads/*
             var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
             Directory.CreateDirectory(uploadsDir);
 
             // Unique filename to avoid collisions
-            var safeName = Path.GetFileName(file.FileName);
+            var safeName = Path.GetFileName(form.File.FileName);
             var unique = $"{Guid.NewGuid():n}_{safeName}";
             var savedPath = Path.Combine(uploadsDir, unique);
 
             using (var stream = new FileStream(savedPath, FileMode.Create))
             {
-                await file.CopyToAsync(stream);
+                await form.File.CopyToAsync(stream);
             }
 
             // Public URL (served by UseStaticFiles)
@@ -75,14 +84,13 @@ namespace SmartMeeting.API.Controllers
 
             var created = await _service.CreateAsync(new AttachmentCreateDto
             {
-                MeetingId = meetingId,
+                MeetingId = form.MeetingId,
                 FileName = safeName,
                 FilePath = publicPath
             });
 
             return CreatedAtAction(nameof(Get), new { id = created.Id }, created);
         }
-
 
         // PUT: api/attachments/5
         [HttpPut("{id}")]
@@ -102,4 +110,3 @@ namespace SmartMeeting.API.Controllers
         }
     }
 }
-
