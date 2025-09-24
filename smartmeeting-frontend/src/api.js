@@ -1,52 +1,66 @@
-const API = "http://localhost:5114"; // backend base URL
-export const API_BASE = API;
+// src/api.js
+const BASE = (import.meta?.env?.VITE_API_BASE ?? "http://localhost:5114").replace(/\/+$/, "");
+export const API_BASE = BASE;
 
-// Helper to turn "/uploads/xyz.png" into "http://localhost:5114/uploads/xyz.png"
-function fileUrl(path) {
+// Turn "/uploads/xyz.png" into an absolute URL
+export function fileUrl(path) {
   if (!path) return "";
-  return path.startsWith("http")
-    ? path
-    : `${API}${path.startsWith("/") ? path : "/" + path}`;
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${BASE}${path.startsWith("/") ? path : "/" + path}`;
 }
-export { fileUrl };
 
 async function jfetch(path, options = {}) {
-  const res = await fetch(`${API}${path}`, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    ...options,
-  });
+  const url = `${BASE}${path.startsWith("/") ? path : "/" + path}`;
 
-  // Read body ONCE as text (or empty if 204)
+  let res;
+  try {
+    res = await fetch(url, {
+      headers: {
+        Accept: "application/json, text/plain; q=0.9, */*; q=0.8",
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+      ...options,
+    });
+  } catch (e) {
+    const msg = e?.message || "Network request failed.";
+    throw new Error(`Network error. Is the API running at ${BASE}? ${msg}`);
+  }
+
   const isNoContent = res.status === 204;
   const contentType = res.headers.get("content-type") || "";
-  const isJson = contentType.includes("application/json");
+  const looksJson = /application\/(json|problem\+json)/i.test(contentType);
   const text = isNoContent ? "" : await res.text();
 
-  // Parse JSON only if it claims to be JSON and we have a non-empty body
   let data = null;
-  if (isJson && text) {
-    try {
-      data = JSON.parse(text);
-    } catch {
-      // fall back to raw text if it wasn't valid JSON after all
-      data = text;
-    }
+  if (looksJson && text) {
+    try { data = JSON.parse(text); } catch { data = text; }
   } else {
     data = text || null;
   }
 
   if (!res.ok) {
-    const message =
-      (data && data.message) ||
+    // Prefer structured messages from ProblemDetails/JSON
+    let msg =
+      (data && (data.message || data.error || data.detail || data.title)) ||
       (typeof data === "string" && data.trim()) ||
-      `Request failed (${res.status})`;
-    const err = new Error(message);
+      "";
+
+    // Friendly error specifically for invalid login
+    const p = path.toLowerCase();
+    if (res.status === 401 && /\b\/api\/auth\/login\b/.test(p)) {
+      msg = "Invalid email or password.";
+    }
+
+    if (!msg) msg = `Request failed (${res.status})`;
+
+    const err = new Error(msg);
     err.status = res.status;
     err.body = data;
     throw err;
   }
 
-  return data; // could be object, string, or null for 204
+  return data;
 }
 
 export const api = {
@@ -60,27 +74,16 @@ export const api = {
   // ===== Users =====
   users: {
     all: () => jfetch("/api/users"),
-    byId: (id) => jfetch(`/api/users/${id}`), // NEW
-    update: (id, payload) =>                 // NEW
-      jfetch(`/api/users/${id}`, {
-        method: "PUT",
-        body: JSON.stringify(payload),
-      }),
+    byId: (id) => jfetch(`/api/users/${id}`),
+    update: (id, payload) =>
+      jfetch(`/api/users/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   },
 
   // ===== Rooms =====
   rooms: {
     all: () => jfetch("/api/rooms"),
-    create: (payload) =>
-      jfetch("/api/rooms", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      }),
-    update: (id, payload) =>
-      jfetch(`/api/rooms/${id}`, {
-        method: "PUT",
-        body: JSON.stringify(payload),
-      }),
+    create: (payload) => jfetch("/api/rooms", { method: "POST", body: JSON.stringify(payload) }),
+    update: (id, payload) => jfetch(`/api/rooms/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
     delete: (id) => jfetch(`/api/rooms/${id}`, { method: "DELETE" }),
   },
 
@@ -88,41 +91,22 @@ export const api = {
   meetings: {
     all: () => jfetch("/api/meetings"),
     byId: (id) => jfetch(`/api/meetings/${id}`),
-    create: (payload) =>
-      jfetch("/api/meetings", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      }),
-    update: (id, payload) =>
-      jfetch(`/api/meetings/${id}`, {
-        method: "PUT",
-        body: JSON.stringify(payload),
-      }),
-    delete: (id) => jfetch(`/api/meetings/${id}`, { method: "DELETE" }), 
+    create: (payload) => jfetch("/api/meetings", { method: "POST", body: JSON.stringify(payload) }),
+    update: (id, payload) => jfetch(`/api/meetings/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+    delete: (id) => jfetch(`/api/meetings/${id}`, { method: "DELETE" }),
   },
 
   // ===== Participants =====
   participants: {
     byMeeting: (meetingId) => jfetch(`/api/participants/byMeeting/${meetingId}`),
-    create: (payload) =>
-      jfetch("/api/participants", {
-        method: "POST",
-        body: JSON.stringify(payload), // { meetingId, userId }
-      }),
+    create: (payload) => jfetch("/api/participants", { method: "POST", body: JSON.stringify(payload) }),
   },
 
   // ===== Meeting Minutes =====
   minutes: {
     byMeeting: (meetingId) => jfetch(`/api/meetingminutes/byMeeting/${meetingId}`),
-    create: (payload) =>
-      jfetch("/api/meetingminutes", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      }),
-    finalize: (id) =>
-      jfetch(`/api/meetingminutes/${id}/finalize`, {
-        method: "PUT",
-      }), // returns null for 204, which is fine
+    create: (payload) => jfetch("/api/meetingminutes", { method: "POST", body: JSON.stringify(payload) }),
+    finalize: (id) => jfetch(`/api/meetingminutes/${id}/finalize`, { method: "PUT" }), // 204 → null
   },
 
   // ===== Attachments =====
@@ -132,17 +116,22 @@ export const api = {
       const form = new FormData();
       form.append("meetingId", meetingId);
       form.append("file", file);
-      const res = await fetch(`${API}/api/attachments/upload`, {
-        method: "POST",
-        body: form, // don't set Content-Type manually
-      });
+
+      let res;
+      try {
+        res = await fetch(`${BASE}/api/attachments/upload`, { method: "POST", body: form });
+      } catch (e) {
+        const msg = e?.message || "Network request failed.";
+        throw new Error(`Network error. Is the API running at ${BASE}? ${msg}`);
+      }
 
       const isNoContent = res.status === 204;
       const contentType = res.headers.get("content-type") || "";
-      const isJson = contentType.includes("application/json");
+      const looksJson = /application\/(json|problem\+json)/i.test(contentType);
       const text = isNoContent ? "" : await res.text();
+
       let data = null;
-      if (isJson && text) {
+      if (looksJson && text) {
         try { data = JSON.parse(text); } catch { data = text; }
       } else {
         data = text || null;
@@ -150,29 +139,26 @@ export const api = {
 
       if (!res.ok) {
         const message =
-          (data && data.message) ||
+          (data && (data.message || data.error || data.detail || data.title)) ||
           (typeof data === "string" && data.trim()) ||
           `Request failed (${res.status})`;
-        throw new Error(message);
+        const err = new Error(message);
+        err.status = res.status;
+        err.body = data;
+        throw err;
       }
-      return data; // should be the created AttachmentDto
+      return data;
     },
     delete: (id) => jfetch(`/api/attachments/${id}`, { method: "DELETE" }),
   },
 
-    // ===== Notifications =====
+  // ===== Notifications =====
   notifications: {
     listByUser: (userId, unreadOnly = false, take = 20) =>
       jfetch(`/api/notifications/user/${userId}?unreadOnly=${unreadOnly}&take=${take}`),
-
     unreadCount: (userId) => jfetch(`/api/notifications/user/${userId}/unreadCount`),
-
     markRead: (id) => jfetch(`/api/notifications/${id}/read`, { method: "POST" }),
-
-    markAllRead: (userId) =>
-      jfetch(`/api/notifications/user/${userId}/readAll`, { method: "POST" }),
-
+    markAllRead: (userId) => jfetch(`/api/notifications/user/${userId}/readAll`, { method: "POST" }),
     delete: (id) => jfetch(`/api/notifications/${id}`, { method: "DELETE" }),
   },
-
 };

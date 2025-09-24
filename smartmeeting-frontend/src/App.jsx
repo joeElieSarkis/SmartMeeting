@@ -16,11 +16,12 @@ export default function Login() {
       const user = await api.login(email.trim(), password);
       localStorage.setItem("sm_user", JSON.stringify(user));
       nav("/dashboard", { replace: true });
-    }catch(ex){
-      setErr(ex?.message || "Login failed");
-    }finally{
-      setBusy(false);
-    }
+      } catch (ex) {
+        setErr(ex?.status === 401 ? "Invalid email or password." : (ex?.message || "Login failed"));
+      } finally {
+        setBusy(false);
+      }
+
   }
 
   return (
