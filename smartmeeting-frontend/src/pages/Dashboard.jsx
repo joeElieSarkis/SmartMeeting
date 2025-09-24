@@ -20,11 +20,15 @@ export default function Dashboard() {
   const [editErr, setEditErr] = useState("");
   const [editBusy, setEditBusy] = useState(false);
 
+  // reports state
+  const [range, setRange] = useState("week"); // "week" | "month"
+
   async function load() {
     setErr(""); setLoading(true);
     try {
       const [ms, rs] = await Promise.all([api.meetings.all(), api.rooms.all()]);
       ms.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+      rs.sort((a, b) => a.name.localeCompare(b.name));
       setMeetings(ms);
       setRooms(rs);
     } catch {
@@ -139,12 +143,168 @@ export default function Dashboard() {
     }
   }
 
+  // ---------------- Reports (client-side) ----------------
+  const isCanceled = (status) => {
+    const s = (status || "").toLowerCase();
+    return s === "canceled" || s === "cancelled";
+  };
+  const now = new Date();
+  const [wkStart, wkEnd] = useMemo(() => weekBounds(now), [now]);
+  const monthWeeks = useMemo(() => monthGridBounds(now), [now]);
+
+  const weekSummary = useMemo(() => {
+    const labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const counts = Array(7).fill(0);
+    const items = meetings.filter(
+      (m) => !isCanceled(m.status) && isInRange(new Date(m.startTime), wkStart, wkEnd)
+    );
+    items.forEach((m) => {
+      const d = new Date(m.startTime);
+      counts[d.getDay()] += 1;
+    });
+    return {
+      title: `${wkStart.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${wkEnd.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`,
+      points: labels.map((label, i) => ({ label, count: counts[i] })),
+      total: counts.reduce((a, b) => a + b, 0),
+    };
+  }, [meetings, wkStart, wkEnd]);
+
+  const monthSummary = useMemo(() => {
+    const s = monthStart(now), e = monthEnd(now);
+    const items = meetings.filter((m) => !isCanceled(m.status) && isInRange(new Date(m.startTime), s, e));
+    const buckets = monthWeeks.map((w, idx) => ({
+      label: `W${idx + 1}`,
+      count: items.filter((m) => {
+        const d = new Date(m.startTime);
+        return d >= w.start && d <= w.end;
+      }).length,
+      range: `${w.start.toLocaleDateString(undefined, { month: "short", day: "numeric" })}–${w.end.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`,
+    }));
+    return {
+      title: now.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+      points: buckets,
+      total: buckets.reduce((a, b) => a + b.count, 0),
+    };
+  }, [meetings, monthWeeks, now]);
+
+  const summary = range === "week" ? weekSummary : monthSummary;
+  const maxCount = Math.max(1, ...summary.points.map((p) => p.count));
+
+  // Most used rooms (last 30 days)
+  const topRooms = useMemo(() => {
+    const to = new Date();
+    const from = new Date();
+    from.setDate(to.getDate() - 30);
+
+    const filtered = meetings.filter((m) => {
+      if (isCanceled(m.status)) return false;
+      const s = new Date(m.startTime);
+      const e = new Date(m.endTime);
+      return e >= from && s <= to;
+    });
+
+    const minsDiff = (a, b) => Math.max(0, (b - a) / 60000);
+    const map = new Map(); // roomId -> { roomId, roomName, meetings, minutes }
+    filtered.forEach((m) => {
+      const r = rooms.find((x) => x.id === m.roomId);
+      const key = m.roomId;
+      const cur = map.get(key) || { roomId: key, roomName: r?.name || `#${key}`, meetings: 0, minutes: 0 };
+      cur.meetings += 1;
+      cur.minutes += minsDiff(new Date(m.startTime), new Date(m.endTime));
+      map.set(key, cur);
+    });
+
+    const list = Array.from(map.values())
+      .sort((a, b) => (b.meetings - a.meetings) || (b.minutes - a.minutes))
+      .slice(0, 5)
+      .map((x) => ({ ...x, hours: Math.round(x.minutes / 60) }));
+    return { from, to, rows: list };
+  }, [meetings, rooms]);
+
   return (
     <div className="grid" style={{gap:16}}>
       <h1 className="page-title">Dashboard</h1>
 
       {err && <div className="card" style={{color:"var(--danger)"}}>{err}</div>}
       {loading && <div className="card">Loading…</div>}
+
+      {/* Quick actions */}
+      <div className="grid" style={{gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))"}}>
+        <button className="btn" onClick={()=>nav("/meetings/book")}>Schedule Meeting</button>
+        <button className="btn" onClick={goJoin} disabled={!nextMeeting}>Join Now</button>
+        <button className="btn" onClick={()=>nav("/minutes/review")}>View Minutes</button>
+        {user?.role === "Admin" && (
+          <button className="btn" onClick={()=>nav("/admin/rooms")}>Manage Rooms</button>
+        )}
+      </div>
+
+      {/* Reports: Summary + Most Used Rooms */}
+      <div className="stats-grid">
+        <div className="card">
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+            <h2 className="section-title" style={{ marginBottom: 0 }}>
+              Summary ({range === "week" ? "This Week" : "This Month"})
+            </h2>
+            <div className="row">
+              <select className="input" value={range} onChange={(e) => setRange(e.target.value)}>
+                <option value="week">Week</option>
+                <option value="month">Month</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ color: "var(--muted)", marginTop: 4 }}>{summary.title}</div>
+
+          {summary.points.length === 0 ? (
+            <div className="muted" style={{ marginTop: 12 }}>No data yet.</div>
+          ) : (
+            <div className="mini-bars" style={{ marginTop: 12 }}>
+              {summary.points.map((p, i) => (
+                <div className="mini-row" key={i}>
+                  <div style={{ fontWeight: 700, textAlign: "right" }}>{p.label}</div>
+                  <div className="mini-track">
+                    <div className="mini-fill" style={{ width: `${(p.count / maxCount) * 100}%` }} />
+                  </div>
+                  <div style={{ textAlign: "right" }}>{p.count}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="row" style={{ marginTop: 12, color: "var(--muted)" }}>
+            <span className="badge">Total: {summary.total}</span>
+          </div>
+        </div>
+
+        <div className="card">
+          <h2 className="section-title" style={{ marginBottom: 0 }}>Most Used Rooms</h2>
+          <div className="muted" style={{ marginTop: 4 }}>
+            Last 30 days ({topRooms.from.toLocaleDateString()} – {topRooms.to.toLocaleDateString()})
+          </div>
+
+          {topRooms.rows.length === 0 ? (
+            <div className="muted" style={{ marginTop: 12 }}>No room usage yet.</div>
+          ) : (
+            <table className="table" style={{ marginTop: 12 }}>
+              <thead>
+                <tr>
+                  <th>Room</th>
+                  <th>Meetings</th>
+                  <th>Hours</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topRooms.rows.map((r) => (
+                  <tr key={r.roomId}>
+                    <td>{r.roomName}</td>
+                    <td>{r.meetings}</td>
+                    <td>{r.hours}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
 
       {/* Notifications */}
       <section className="card">
@@ -181,16 +341,6 @@ export default function Dashboard() {
           )}
         </ul>
       </section>
-
-      {/* Quick actions */}
-      <div className="grid" style={{gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))"}}>
-        <button className="btn" onClick={()=>nav("/meetings/book")}>Schedule Meeting</button>
-        <button className="btn" onClick={goJoin} disabled={!nextMeeting}>Join Now</button>
-        <button className="btn" onClick={()=>nav("/minutes/review")}>View Minutes</button>
-        {user?.role === "Admin" && (
-          <button className="btn" onClick={()=>nav("/admin/rooms")}>Manage Rooms</button>
-        )}
-      </div>
 
       {/* Room availability (today) */}
       <section className="card">
@@ -302,4 +452,33 @@ function endOfDay(d){ const x=new Date(d); x.setHours(23,59,59,999); return x; }
 function pad2(n){ return String(n).padStart(2,"0"); }
 function formatDate(d){
   return d.toLocaleDateString(undefined, { weekday:"short", year:"numeric", month:"short", day:"numeric" });
+}
+function isInRange(dt, start, end){ return dt >= start && dt <= end; }
+function weekBounds(d){
+  const x = new Date(d);
+  const dow = x.getDay();
+  const start = new Date(x);
+  start.setDate(x.getDate() - dow);
+  start.setHours(0,0,0,0);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23,59,59,999);
+  return [start, end];
+}
+function monthStart(d){ return new Date(d.getFullYear(), d.getMonth(), 1, 0,0,0,0); }
+function monthEnd(d){ return new Date(d.getFullYear(), d.getMonth()+1, 0, 23,59,59,999); }
+function monthGridBounds(d){
+  const start = monthStart(d);
+  const end = monthEnd(d);
+  const [w0] = weekBounds(start);
+  const weeks = [];
+  for (let cursor = new Date(w0); cursor <= end; cursor.setDate(cursor.getDate() + 7)) {
+    const [ws, we] = weekBounds(cursor);
+    weeks.push({ start: new Date(ws), end: new Date(we) });
+  }
+  for (const w of weeks) {
+    if (w.start < start) w.start = new Date(start);
+    if (w.end > end) w.end = new Date(end);
+  }
+  return weeks;
 }

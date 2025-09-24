@@ -98,7 +98,7 @@ export const api = {
         method: "PUT",
         body: JSON.stringify(payload),
       }),
-    delete: (id) => jfetch(`/api/meetings/${id}`, { method: "DELETE" }), // NEW
+    delete: (id) => jfetch(`/api/meetings/${id}`, { method: "DELETE" }), 
   },
 
   // ===== Participants =====
@@ -159,4 +159,20 @@ export const api = {
     },
     delete: (id) => jfetch(`/api/attachments/${id}`, { method: "DELETE" }),
   },
+
+    // ===== Notifications =====
+  notifications: {
+    listByUser: (userId, unreadOnly = false, take = 20) =>
+      jfetch(`/api/notifications/user/${userId}?unreadOnly=${unreadOnly}&take=${take}`),
+
+    unreadCount: (userId) => jfetch(`/api/notifications/user/${userId}/unreadCount`),
+
+    markRead: (id) => jfetch(`/api/notifications/${id}/read`, { method: "POST" }),
+
+    markAllRead: (userId) =>
+      jfetch(`/api/notifications/user/${userId}/readAll`, { method: "POST" }),
+
+    delete: (id) => jfetch(`/api/notifications/${id}`, { method: "DELETE" }),
+  },
+
 };

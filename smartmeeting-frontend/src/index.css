@@ -289,3 +289,27 @@ header a, .nav a, a.navlink { color: inherit; }
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--ring) inset; /* inset = not clipped by card */
 }
+
+/* --- Dashboard mini bars & layout --- */
+.stats-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 980px){ .stats-grid { grid-template-columns: 1fr; } }
+
+.mini-bars { display: grid; gap: 8px; }
+.mini-row {
+  display: grid;
+  grid-template-columns: 48px 1fr 36px;
+  align-items: center;
+  gap: 8px;
+}
+.mini-track {
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--surface) 75%, #000 25%);
+  overflow: hidden;
+}
+.mini-fill {
+  height: 100%;
+  background: var(--primary);
+  transition: width .3s ease;
+}
